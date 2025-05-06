@@ -27,49 +27,29 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         sudo apt-get update
         
         if [ "$DISTRO" = "debian" ]; then
-            # On Debian, the package is ta-lib-dev (without 'lib' prefix)
-            echo "Checking if ta-lib-dev is available in Debian repositories:"
-            if apt-cache policy ta-lib-dev | grep -q "Candidate:"; then
-                echo "ta-lib-dev found in repositories, installing..."
-                sudo apt-get install -y ta-lib-dev
-                
-                # Verify C library exported symbols
-                echo "Verifying exported symbols:"
-                if [ -f "/usr/lib/libta_lib.so" ]; then
-                    # Debian typically uses underscore in the filename
-                    if nm -D /usr/lib/libta_lib.so | grep -q "TA_AVGDEV_Lookback"; then
-                        echo "✓ TA_AVGDEV_Lookback symbol found in libta_lib.so"
-                        echo "Creating symlinks for Python wrapper..."
-                        sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
-                        sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
-                        sudo ldconfig
-                        echo "TA-Lib C library installed successfully from Debian package!"
-                    else
-                        echo "Required symbols not found in installed package, falling back to source installation..."
-                        sudo apt-get install -y build-essential wget autoconf libtool pkg-config
-                        INSTALL_FROM_SOURCE=1
-                    fi
-                elif [ -f "/usr/lib/libta-lib.so" ]; then
-                    # Check if dash version exists
-                    if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
-                        echo "✓ TA_AVGDEV_Lookback symbol found in libta-lib.so"
-                        echo "TA-Lib C library installed successfully from Debian package!"
-                    else
-                        echo "Required symbols not found in installed package, falling back to source installation..."
-                        sudo apt-get install -y build-essential wget autoconf libtool pkg-config
-                        INSTALL_FROM_SOURCE=1
-                    fi
-                else
-                    echo "Library file not found, falling back to source installation..."
-                    sudo apt-get install -y build-essential wget autoconf libtool pkg-config
-                    INSTALL_FROM_SOURCE=1
-                fi
+            # For Debian, download and install the official TA-Lib Debian package
+            echo "Installing TA-Lib on Debian using official package..."
+            sudo apt-get install -y wget
+            
+            echo "Downloading TA-Lib 0.6.4 Debian package..."
+            wget https://github.com/ta-lib/ta-lib/releases/download/0.6.4/ta-lib_0.6.4_amd64.deb
+            
+            echo "Installing package with dpkg..."
+            sudo dpkg -i ta-lib_0.6.4_amd64.deb
+            # Install any missing dependencies
+            sudo apt-get install -f -y
+            
+            # Verify the installation
+            if [ -f "/usr/lib/libta-lib.so" ] || [ -f "/usr/lib/libta_lib.so" ]; then
+                echo "TA-Lib C library installed successfully from Debian package!"
             else
-                echo "ta-lib-dev not found in repositories"
-                echo "Will install from source instead..."
+                echo "Package installation failed, falling back to source installation..."
                 sudo apt-get install -y build-essential wget autoconf libtool pkg-config
                 INSTALL_FROM_SOURCE=1
             fi
+            
+            # Cleanup
+            rm -f ta-lib_0.6.4_amd64.deb
         else
             # Ubuntu handling (existing code)
             # First try to enable Universe repository if on Ubuntu (contains libta-lib-dev)
@@ -160,21 +140,29 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
         brew install ta-lib
         
         # Use dynamic prefix detection
-        PREFIX=$(brew --prefix ta-lib)
-        echo "TA-Lib installed at: $PREFIX"
+        BREW_PREFIX=$(brew --prefix ta-lib)
+        echo "TA-Lib installed at: $BREW_PREFIX"
         
-        # Verify installation
-        if [ -f "$PREFIX/lib/libta_lib.dylib" ] || [ -f "$PREFIX/lib/libta-lib.dylib" ]; then
-            echo "TA-Lib C library installed successfully from Homebrew!"
-            # Set environment variables for proper linking
-            export LDFLAGS="-L$PREFIX/lib"
-            export CPPFLAGS="-I$PREFIX/include"
-            echo "Set LDFLAGS=$LDFLAGS"
-            echo "Set CPPFLAGS=$CPPFLAGS"
+        # Check for either library name format
+        if [ -f "$BREW_PREFIX/lib/libta-lib.dylib" ]; then
+            LIB_FILE="$BREW_PREFIX/lib/libta-lib.dylib"
+            echo "Found TA-Lib at $LIB_FILE (dash version)"
+        elif [ -f "$BREW_PREFIX/lib/libta_lib.dylib" ]; then
+            LIB_FILE="$BREW_PREFIX/lib/libta_lib.dylib"
+            echo "Found TA-Lib at $LIB_FILE (underscore version)"
         else
+            echo "TA-Lib dylib not found at $BREW_PREFIX/lib"
             echo "Homebrew installation failed, falling back to source installation..."
             brew install wget automake libtool
             INSTALL_FROM_SOURCE=1
+        fi
+        
+        if [ -n "$LIB_FILE" ]; then
+            # Set environment variables for proper linking
+            export LDFLAGS="-L$(dirname "$LIB_FILE")"
+            export CPPFLAGS="-I$BREW_PREFIX/include"
+            echo "Set LDFLAGS=$LDFLAGS"
+            echo "Set CPPFLAGS=$CPPFLAGS"
         fi
     else
         echo "Please install Homebrew (https://brew.sh) and try again."
@@ -281,12 +269,12 @@ if [ "$INSTALL_FROM_SOURCE" = "1" ]; then
     # Set environment variables for Python wrapper installation
     echo "Setting up environment for Python wrapper installation..."
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        if [ -n "$PREFIX" ]; then
+        if [ -n "$BREW_PREFIX" ]; then
             # Use Homebrew prefix if available
-            export TA_LIBRARY_PATH=$PREFIX/lib
-            export TA_INCLUDE_PATH=$PREFIX/include
-            export LDFLAGS="-L$PREFIX/lib"
-            export CFLAGS="-I$PREFIX/include"
+            export TA_LIBRARY_PATH=$BREW_PREFIX/lib
+            export TA_INCLUDE_PATH=$BREW_PREFIX/include
+            export LDFLAGS="-L$BREW_PREFIX/lib"
+            export CFLAGS="-I$BREW_PREFIX/include"
         else
             export TA_LIBRARY_PATH=/usr/local/lib
             export TA_INCLUDE_PATH=/usr/local/include
@@ -315,9 +303,14 @@ else
     pip install TA-Lib
 fi
 
-# Verify Python wrapper
+# Verify Python wrapper - modified to be compatible with PowerShell on Windows
 echo "Verifying Python wrapper installation..."
-python3 - <<EOF || python - <<EOF
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    # PowerShell-compatible verification (no heredoc)
+    python -c "import talib, numpy as np; print('SMA:', talib.SMA(np.arange(10))[:3])"
+else
+    # Unix-style verification with heredoc
+    python3 - <<EOF || python - <<EOF
 import sys
 import os
 
@@ -355,6 +348,7 @@ except Exception as e:
     print(f"Error using talib: {e}")
     sys.exit(1)
 EOF
+fi
 
 echo "TA-Lib bootstrap complete! ✓"
 echo "You can now import talib in your Python projects."

@@ -50,7 +50,7 @@ def test_talib():
         open_price = np.random.random(data_length)
         high = np.maximum(close, open_price) + np.random.random(data_length) * 0.1
         low = np.minimum(close, open_price) - np.random.random(data_length) * 0.1
-        volume = np.random.random(data_length) * 1000
+        volume = np.random.randint(1, 1000, size=data_length).astype(np.float64)  # Generate integer-like values but keep as float64
         
         # Generate test cases for various function groups
         tests = [
@@ -75,7 +75,7 @@ def test_talib():
             {"name": "MOM", "func": lambda: talib.MOM(close, timeperiod=10)},
             
             # Volume Indicators
-            {"name": "OBV", "func": lambda: talib.OBV(close, volume.astype(int))},
+            {"name": "OBV", "func": lambda: talib.OBV(close, volume)},
             {"name": "AD", "func": lambda: talib.AD(high, low, close, volume)},
             {"name": "ADOSC", "func": lambda: talib.ADOSC(high, low, close, volume, fastperiod=3, slowperiod=10)},
             

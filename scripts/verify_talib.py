@@ -78,11 +78,11 @@ def verify_talib():
     # Run basic indicator tests
     print("\nRunning indicator tests...")
     try:
-        # Create test data - all arrays should be 1D
-        close = np.random.random(100)
-        high = np.random.random(100)
-        low = np.random.random(100)
-        volume = np.random.random(100) * 1000
+        # Create test data - all arrays should be 1D and double precision
+        close = np.random.random(100).astype(np.float64)
+        high = np.random.random(100).astype(np.float64)
+        low = np.random.random(100).astype(np.float64)
+        volume = np.random.randint(1, 1000, size=100).astype(np.float64)  # Keep as float64 for TA-Lib
         
         # Test SMA calculation (moving average)
         sma = talib.SMA(close, timeperiod=14)
@@ -112,8 +112,8 @@ def verify_talib():
         adx = talib.ADX(high, low, close, timeperiod=14)
         print_colored(f"ADX: OK (shape: {adx.shape})", "success")
         
-        # Test OBV (volume)
-        obv = talib.OBV(close, volume.astype(int))
+        # Test OBV (volume) - volume should be float64 for TA-Lib, not int
+        obv = talib.OBV(close, volume)
         print_colored(f"OBV: OK (shape: {obv.shape})", "success")
         
         # Test AVGDEV (previously problematic)
@@ -131,7 +131,7 @@ def verify_talib():
     # Run quick smoke test
     print("\nRunning quick smoke test:")
     try:
-        sma_result = talib.SMA(np.arange(10, dtype=float))
+        sma_result = talib.SMA(np.arange(10, dtype=np.float64))
         print_colored(f"SMA quick test: {sma_result[5:]}", "info")
         if sma_result.shape[0] == 10:
             print_colored("Quick smoke test passed", "success")

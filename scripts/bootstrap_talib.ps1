@@ -84,17 +84,41 @@ if ($CI_ENV) {
     $ENV_NAME = "talib-env-ci"
 }
 
+# Detect current Python version for compatibility reasons
+try {
+    $PY_VERSION = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+    Write-Host "Detected Python version: $PY_VERSION" -ForegroundColor Yellow
+    
+    # Use Python 3.10 if in CI to ensure compatibility with TA-Lib in conda-forge
+    if ($CI_ENV) {
+        $PY_VERSION = "3.10"
+        Write-Host "Forcing Python version to 3.10 for TA-Lib compatibility in CI" -ForegroundColor Yellow
+    }
+} catch {
+    # Default to Python 3.10 if detection fails
+    $PY_VERSION = "3.10"
+    Write-Host "Python version detection failed, defaulting to 3.10" -ForegroundColor Yellow
+}
+
 # Check if we're in a conda environment or create a new one
 $CURRENT_ENV = $env:CONDA_DEFAULT_ENV
 if (-not $CURRENT_ENV -or $CURRENT_ENV -eq "base") {
-    Write-Host "Creating a new conda environment '$ENV_NAME'..." -ForegroundColor Green
-    # Force "yes" for CI environments
-    conda create -y -n $ENV_NAME python=3.10
+    Write-Host "Creating a new conda environment '$ENV_NAME' with Python $PY_VERSION..." -ForegroundColor Green
+    # Force "yes" for CI environments and specify Python version explicitly
+    conda create -y -n $ENV_NAME python=$PY_VERSION
     
     # Try to activate the environment
     try {
         Write-Host "Activating conda environment..."
-        conda activate $ENV_NAME
+        # For CI environments, sometimes we need to be more explicit
+        if ($CI_ENV) {
+            # Initialize conda again to ensure activation works
+            & conda init powershell
+            # Try direct approach for CI
+            & $env:USERPROFILE\miniconda3\Scripts\activate.ps1 $ENV_NAME
+        } else {
+            conda activate $ENV_NAME
+        }
     }
     catch {
         Write-Host "Could not automatically activate environment. Please run the following manually:" -ForegroundColor Yellow
@@ -113,6 +137,12 @@ Write-Host "Installing TA-Lib from conda-forge..."
 # Add extra flags for CI environments
 if ($CI_ENV) {
     conda install -y -c conda-forge ta-lib numpy --no-update-deps
+    
+    # If that fails, try specifying the exact version
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "First installation attempt failed. Trying with specific versions..." -ForegroundColor Yellow
+        conda install -y -c conda-forge ta-lib=0.4.19 numpy
+    }
 }
 else {
     conda install -y -c conda-forge ta-lib numpy
@@ -153,6 +183,9 @@ function Install-TalibWindowsFallback {
     if ($CI_ENV) {
         Write-Host "Trying to download pre-compiled wheel for Windows CI..." -ForegroundColor Yellow
         
+        # Make sure numpy is installed before trying to install TA-Lib
+        pip install numpy --no-cache-dir
+        
         # Alternative URLs for wheels
         $WHEEL_URLS = @(
             "https://github.com/conda-forge/ta-lib-feedstock/files/7028548/ta_lib-0.4.24-cp${PY_VER}-cp${PY_VER}-win_${ARCH}.whl",
@@ -175,13 +208,15 @@ function Install-TalibWindowsFallback {
         }
         
         if (-not $success) {
-            Write-Host "Wheel installation failed. Trying conda as fallback." -ForegroundColor Yellow
-            # We're already in a conda environment, so just install ta-lib
-            conda install -y -c conda-forge ta-lib
+            Write-Host "Wheel installation failed. Trying conda as fallback with specific versions." -ForegroundColor Yellow
+            # We're already in a conda environment, so just install ta-lib with a specific version
+            conda install -y -c conda-forge ta-lib=0.4.19 numpy
         }
     }
     else {
         # Try installing from wheel for non-CI Windows
+        pip install numpy --no-cache-dir
+        
         try {
             pip install --no-cache-dir "https://download.lfd.uci.edu/pythonlibs/archived/ta-lib-0.4.24-cp${PY_VER}-cp${PY_VER}-win_${ARCH}.whl"
         }
@@ -191,6 +226,7 @@ function Install-TalibWindowsFallback {
             }
             catch {
                 Write-Host "Wheel installation failed. Using conda as fallback." -ForegroundColor Yellow
+                conda install -y -c conda-forge ta-lib=0.4.19 numpy
             }
         }
     }
@@ -236,6 +272,9 @@ try {
 catch {
     Write-Host "TA-Lib verification failed. Attempting fallback installation..." -ForegroundColor Red
     Install-TalibWindowsFallback
+    
+    # Make sure numpy is installed
+    pip install numpy --no-cache-dir
     
     # Verify again after fallback
     try {

@@ -24,7 +24,7 @@ jobs:
       run: |
         # Install Python and dependencies with minimal footprint
         apt-get update
-        apt-get install -y --no-install-recommends python3 python3-pip python3-venv python3-dev build-essential wget ca-certificates
+        apt-get install -y --no-install-recommends python3 python3-pip python3-venv python3-dev build-essential wget ca-certificates sudo
         
         # Clean up apt cache to reduce container size
         apt-get clean
@@ -54,7 +54,8 @@ jobs:
     - name: Install TA-Lib using bootstrap script
       run: |
         chmod +x scripts/bootstrap_talib.sh
-        bash scripts/bootstrap_talib.sh
+        # Use sudo for system-wide installations in the script
+        sudo -E bash scripts/bootstrap_talib.sh
       
     - name: Install Python dependencies
       run: |
@@ -71,34 +72,7 @@ jobs:
     
     - name: Verify TA-Lib installation
       run: |
-        python -c "
-        import talib
-        import numpy as np
-        
-        # Test basic SMA calculation
-        data = np.random.random(100)
-        output = talib.SMA(data)
-        print('TA-Lib SMA output:', output[:5])
-        
-        # Ensure AVGDEV function is available
-        if hasattr(talib, 'AVGDEV'):
-            avgdev = talib.AVGDEV(data)
-            print('TA-Lib AVGDEV output:', avgdev[:5])
-        else:
-            print('WARNING: AVGDEV function not available')
-        
-        # List all available functions
-        print('Available functions:', len(talib.get_functions()))
-        print('Sample functions:', talib.get_functions()[:5])
-        
-        # Quick smoke test that was requested
-        sma_result = talib.SMA(np.arange(10))
-        print('Quick smoke test - SMA:', sma_result[0:3])
-        "
-    
-    - name: Run comprehensive indicator tests
-      run: |
-        bash scripts/verify_talib.sh
+        python scripts/verify_talib.py
     
     - name: Lint with flake8
       run: |
@@ -149,6 +123,19 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
     
+    # Check for macOS ARM architecture (GitHub hosted runners could eventually be Apple Silicon)
+    - name: Check CPU architecture
+      id: cpu-arch
+      run: |
+        ARCH=$(uname -m)
+        echo "Architecture detected: $ARCH"
+        echo "arch=$ARCH" >> $GITHUB_OUTPUT
+        # Set CONDA_SUBDIR if needed for ARM architecture
+        if [[ "$ARCH" == "arm64" ]]; then
+          echo "Setting CONDA_SUBDIR for Apple Silicon"
+          echo "CONDA_SUBDIR=osx-64" >> $GITHUB_ENV
+        fi
+    
     - name: Install TA-Lib using bootstrap script
       run: |
         chmod +x scripts/bootstrap_talib.sh
@@ -164,23 +151,7 @@ jobs:
     
     - name: Verify TA-Lib installation
       run: |
-        python -c "
-        import talib
-        import numpy as np
-        
-        # Test basic SMA calculation
-        data = np.random.random(100)
-        output = talib.SMA(data)
-        print('TA-Lib SMA output:', output[:5])
-        
-        # List all available functions
-        print('Available functions:', len(talib.get_functions()))
-        print('Sample functions:', talib.get_functions()[:5])
-        
-        # Quick smoke test
-        sma_result = talib.SMA(np.arange(10))
-        print('Quick smoke test - SMA:', sma_result[0:3])
-        "
+        python scripts/verify_talib.py
     
     - name: Run comprehensive indicator tests
       run: |
@@ -209,6 +180,9 @@ jobs:
     - name: Install TA-Lib using bootstrap script
       shell: pwsh
       run: |
+        # Set execution policy to allow script execution
+        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+        # Run the bootstrap script
         .\scripts\bootstrap_talib.ps1
     
     - name: Install Python dependencies
@@ -223,31 +197,20 @@ jobs:
     - name: Verify TA-Lib installation
       shell: pwsh
       run: |
-        $verificationScript = @"
-        import talib
-        import numpy as np
-        
-        # Test basic SMA calculation
-        data = np.random.random(100)
-        output = talib.SMA(data)
-        print('TA-Lib SMA output:', output[:5])
-        
-        # List all available functions
-        print('Available functions:', len(talib.get_functions()))
-        print('Sample functions:', talib.get_functions()[:5])
-        
-        # Quick smoke test
-        sma_result = talib.SMA(np.arange(10))
-        print('Quick smoke test - SMA:', sma_result[0:3])
-        "@
-        
-        $verificationScriptPath = "$env:TEMP\verify_talib.py"
-        $verificationScript | Out-File -FilePath $verificationScriptPath -Encoding utf8
-        python $verificationScriptPath
-        Remove-Item $verificationScriptPath
+        python scripts/verify_talib.py
     
-    - name: Run comprehensive indicator tests
+    - name: Run comprehensive indicator tests (if verify_talib.sh exists)
       shell: pwsh
       run: |
         $env:PYTHONIOENCODING = "utf-8"
-        python scripts/verify_talib.py 
+        if (Test-Path -Path "scripts/verify_talib.sh") {
+          # Only try to run this if bash is available
+          if (Get-Command bash -ErrorAction SilentlyContinue) {
+            bash scripts/verify_talib.sh
+          } else {
+            Write-Host "Bash not available, using Python verification script instead"
+            python scripts/verify_talib.py
+          }
+        } else {
+          python scripts/verify_talib.py
+        } 

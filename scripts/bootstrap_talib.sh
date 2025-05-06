@@ -55,7 +55,8 @@ if ! command -v conda &> /dev/null; then
     # Set up conda in current shell
     if [[ "$OSTYPE" == "linux-gnu"* || "$OSTYPE" == "darwin"* ]]; then
         CONDA_PATH="$HOME/miniconda3/bin/conda"
-        eval "$("$HOME/miniconda3/bin/conda" shell.bash hook)"
+        # Use the more reliable method to activate conda
+        source "$HOME/miniconda3/etc/profile.d/conda.sh"
     else
         echo "Please restart your shell and run this script again."
         exit 0
@@ -65,6 +66,11 @@ if ! command -v conda &> /dev/null; then
 else
     echo "Conda is already installed."
     CONDA_PATH="conda"
+    
+    # Ensure conda is activated properly in the current shell
+    if [[ -f "$(conda info --base)/etc/profile.d/conda.sh" ]]; then
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+    fi
 fi
 
 # Add conda-forge channel
@@ -72,15 +78,35 @@ echo "Adding conda-forge channel..."
 conda config --add channels conda-forge
 conda config --set channel_priority strict
 
+# Handle macOS ARM architecture
+if [[ "$OSTYPE" == "darwin"* && $(uname -m) == "arm64" ]]; then
+    echo "Detected macOS ARM architecture (Apple Silicon)"
+    
+    # Try to install with native ARM support first
+    if ! conda search -c conda-forge ta-lib | grep -q "osx-arm64"; then
+        echo "No native ARM builds found for TA-Lib. Configuring x86_64 emulation..."
+        export CONDA_SUBDIR=osx-64
+        
+        # Permanently configure this environment to use osx-64
+        conda config --env --set subdir osx-64
+        
+        echo "Configured conda to use x86_64 architecture for this installation."
+        echo "This will use Rosetta 2 for emulation if needed."
+    else
+        echo "Native ARM builds for TA-Lib are available. Using osx-arm64 architecture."
+    fi
+fi
+
 # Check if we're in a conda environment
 if [[ -z "${CONDA_DEFAULT_ENV}" ]]; then
     echo "Creating a new conda environment 'talib-env'..."
-    conda create -y -n talib-env python=3.9
+    conda create -y -n talib-env python=3.10
     
     # Activate the environment
     if [[ "$OSTYPE" == "linux-gnu"* || "$OSTYPE" == "darwin"* ]]; then
         echo "Activating conda environment..."
-        eval "$(conda shell.bash hook)"
+        # Use the more reliable activation method
+        source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate talib-env
     elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
         echo "On Windows, please run: conda activate talib-env"
@@ -91,9 +117,20 @@ else
     echo "Using existing conda environment: $CONDA_DEFAULT_ENV"
 fi
 
+# If on macOS ARM, ensure CONDA_SUBDIR is preserved in the environment
+if [[ "$OSTYPE" == "darwin"* && $(uname -m) == "arm64" && -n "$CONDA_SUBDIR" ]]; then
+    conda env config vars set CONDA_SUBDIR=osx-64
+    echo "Set CONDA_SUBDIR=osx-64 for this environment permanently."
+    echo "You may need to reactivate the environment: conda activate talib-env"
+    
+    # Re-activate to apply the environment variable
+    conda activate talib-env
+fi
+
 # Install TA-Lib and NumPy from conda-forge
 echo "Installing TA-Lib from conda-forge..."
-conda install -y -c conda-forge ta-lib=0.4.24 numpy
+# Removed version pinning as suggested for better cross-platform compatibility
+conda install -y -c conda-forge ta-lib numpy
 
 # Set TA_LIBRARY_PATH and TA_INCLUDE_PATH for pip installs
 CONDA_PREFIX="${CONDA_PREFIX:-$HOME/miniconda3/envs/talib-env}"
@@ -278,5 +315,6 @@ echo "Installation Notes:"
 echo "* If you're using this in a CI environment, make sure to set TA_LIBRARY_PATH and TA_INCLUDE_PATH"
 echo "* For Debian/Ubuntu, package names vary: try 'ta-lib' or 'libta-lib0'"
 echo "* For macOS, ensure brew installs correctly and check for lib naming consistency"
+echo "* For macOS ARM (Apple Silicon), Rosetta 2 may be used if native builds aren't available"
 echo "* For Windows, pip install may need specific wheel versions"
-echo "====================================" 
+echo "=====================================" 

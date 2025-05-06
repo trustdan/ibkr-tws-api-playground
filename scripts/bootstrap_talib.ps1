@@ -24,8 +24,19 @@ if (-not $condaExists) {
     # Remove installer
     Remove-Item $installerPath
     
-    Write-Host "Miniconda installed. Please restart PowerShell and run this script again." -ForegroundColor Green
-    exit 0
+    # Update PATH for the current session
+    $env:Path = "$env:USERPROFILE\miniconda3;$env:USERPROFILE\miniconda3\Scripts;$env:USERPROFILE\miniconda3\Library\bin;$env:Path"
+    
+    Write-Host "Miniconda installed. You may need to restart PowerShell for conda to be available." -ForegroundColor Green
+    # Try to initialize conda for this session
+    try {
+        # Initialize conda
+        conda init powershell
+        Write-Host "Initialized conda for PowerShell." -ForegroundColor Green
+    } catch {
+        Write-Host "Couldn't initialize conda automatically. Please restart PowerShell and run this script again." -ForegroundColor Yellow
+        exit 0
+    }
 } else {
     Write-Host "Conda is already installed." -ForegroundColor Green
 }
@@ -40,7 +51,7 @@ $inCondaEnv = $env:CONDA_DEFAULT_ENV -ne $null -and $env:CONDA_DEFAULT_ENV -ne "
 
 if (-not $inCondaEnv) {
     Write-Host "Creating a new conda environment 'talib-env'..." -ForegroundColor Yellow
-    conda create -y -n talib-env python=3.9
+    conda create -y -n talib-env python=3.10
     
     # Provide instructions to activate the environment
     Write-Host "Please activate the conda environment by running:" -ForegroundColor Yellow
@@ -53,7 +64,8 @@ if (-not $inCondaEnv) {
 
 # Install TA-Lib from conda-forge
 Write-Host "Installing TA-Lib from conda-forge..." -ForegroundColor Yellow
-conda install -y -c conda-forge ta-lib=0.4.24 numpy
+# Removed version pinning for better cross-platform compatibility
+conda install -y -c conda-forge ta-lib numpy
 
 # Set environment variables for pip installs if needed
 $condaPrefix = if ($env:CONDA_PREFIX) { $env:CONDA_PREFIX } else { "$env:USERPROFILE\miniconda3\envs\talib-env" }

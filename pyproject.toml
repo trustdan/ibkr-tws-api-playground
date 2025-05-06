@@ -20,5 +20,4 @@ disallow_incomplete_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = "test_*.py"
-addopts = "--cov=auto_vertical_spread_trader --cov-report=xml --cov-report=term-missing" 
+python_files = "test_*.py" 

@@ -14,6 +14,14 @@ import os
 import pickle
 from typing import Dict, Any, List, Tuple, Optional, Union
 
+# Import scan functions from the scans module
+from auto_vertical_spread_trader.scans import (
+    scan_bull_pullbacks,
+    scan_bear_rallies,
+    scan_high_base,
+    scan_low_base,
+)
+
 # --- CONFIG ---
 CONFIG = {
     # Universe filters
@@ -52,8 +60,18 @@ logger = logging.getLogger(__name__)
 # Event flag for clean shutdown
 exit_event = Event()
 
+# Create IB connection object but don't connect yet
 ib = IB()
-ib.connect("127.0.0.1", 7497, clientId=99)
+
+
+def connect_to_ib():
+    """Connect to Interactive Brokers TWS/Gateway"""
+    try:
+        ib.connect("127.0.0.1", 7497, clientId=99)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to connect to IB: {e}")
+        return False
 
 
 # --- 1. Define & filter universe ---
@@ -250,98 +268,6 @@ def scan_securities(symbols, scan_name, condition_func):
 
     logger.info(f"{scan_name} scan: found {len(signals)} signals")
     return signals
-
-
-def bull_pullback_condition(df):
-    """Bull pullback condition function"""
-    today, y1, y2 = df.iloc[-1], df.iloc[-2], df.iloc[-3]
-
-    # Two bullish candles
-    two_bullish = y2.close > y2.open and y1.close > y1.open
-
-    # Pullback to rising 50MA
-    ma_rising = df.MA50.iloc[-1] > df.MA50.iloc[-2]
-    price_at_ma = today.low <= today.MA50
-
-    return (two_bullish and ma_rising and price_at_ma), {}
-
-
-def bear_rally_condition(df):
-    """Bear rally condition function"""
-    today, y1, y2 = df.iloc[-1], df.iloc[-2], df.iloc[-3]
-
-    # Two bearish candles
-    two_bearish = y2.close < y2.open and y1.close < y1.open
-
-    # Rally into falling 50MA
-    ma_falling = df.MA50.iloc[-1] < df.MA50.iloc[-2]
-    price_at_ma = today.high >= today.MA50
-
-    return (two_bearish and ma_falling and price_at_ma), {}
-
-
-def high_base_condition(df):
-    """High base condition function (vectorized)"""
-    # Calculate additional indicators
-    df["52w_high"] = df["close"].rolling(252).max()
-    df["ATR_ratio"] = df["ATR14"] / df["ATR14"].rolling(20).mean()
-    df["range_pct"] = (df["high"] - df["low"]) / df["close"] * 100
-
-    if len(df) < 20:  # Need at least 20 days for moving averages
-        return False, {}
-
-    # Create boolean masks for each condition
-    near_highs = df["close"] >= CONFIG["PRICE_NEAR_HIGH_PCT"] * df["52w_high"]
-    low_volatility = df["ATR_ratio"] < CONFIG["HIGH_BASE_MAX_ATR_RATIO"]
-    tight_range = (
-        df["range_pct"] < df["range_pct"].rolling(20).mean() * CONFIG["TIGHT_RANGE_FACTOR"]
-    )
-
-    # Combine all conditions
-    condition_met = near_highs & low_volatility & tight_range
-
-    # Return result for the last day
-    return bool(condition_met.iloc[-1]), {}
-
-
-def low_base_condition(df):
-    """Low base condition function (vectorized)"""
-    # Calculate additional indicators
-    df["52w_low"] = df["close"].rolling(252).min()
-    df["ATR_ratio"] = df["ATR14"] / df["ATR14"].rolling(20).mean()
-    df["range_pct"] = (df["high"] - df["low"]) / df["close"] * 100
-
-    if len(df) < 20:  # Need at least 20 days for moving averages
-        return False, {}
-
-    # Create boolean masks for each condition
-    near_lows = df["close"] <= CONFIG["PRICE_NEAR_LOW_PCT"] * df["52w_low"]
-    low_volatility = df["ATR_ratio"] < CONFIG["HIGH_BASE_MAX_ATR_RATIO"]
-    tight_range = (
-        df["range_pct"] < df["range_pct"].rolling(20).mean() * CONFIG["TIGHT_RANGE_FACTOR"]
-    )
-
-    # Combine all conditions
-    condition_met = near_lows & low_volatility & tight_range
-
-    # Return result for the last day
-    return bool(condition_met.iloc[-1]), {}
-
-
-def scan_bull_pullbacks(symbols):
-    return scan_securities(symbols, "Bull Pullback", bull_pullback_condition)
-
-
-def scan_bear_rallies(symbols):
-    return scan_securities(symbols, "Bear Rally", bear_rally_condition)
-
-
-def scan_high_base(symbols):
-    return scan_securities(symbols, "High Base", high_base_condition)
-
-
-def scan_low_base(symbols):
-    return scan_securities(symbols, "Low Base", low_base_condition)
 
 
 # --- 4. Spread selector & placer with bidask ≤15% filter ---
@@ -554,11 +480,6 @@ def monitor_stops():
     logger.info("Stop-loss monitor thread exiting")
 
 
-# Start the monitor thread
-stop_monitor_thread = threading.Thread(target=monitor_stops, daemon=True)
-stop_monitor_thread.start()
-
-
 # --- 6. Schedule your entry scan at 3 PM ET every trading day ---
 spreadBook: Dict[str, Dict[str, Any]] = {}
 tz = pytz.timezone("US/Eastern")
@@ -605,39 +526,56 @@ def run_entries_if_time():
 
 
 # --- 7. Main loop ---
-logger.info("Scheduler started; will enter trades after 3 PM ET each trading day.")
+def main():
+    """Main entry point when running as a script"""
+    # Connect to IB
+    if not connect_to_ib():
+        logger.error("Could not connect to IB. Exiting.")
+        return
 
-try:
-    while not exit_event.is_set():
-        try:
-            # Check connection status
-            if not ib.isConnected():
-                logger.error("IB connection lost. Attempting to reconnect...")
-                try:
-                    ib.connect("127.0.0.1", 7497, clientId=99)
-                    logger.info("Reconnected to IB")
-                except Exception as e:
-                    logger.error(f"Failed to reconnect: {e}")
-                    time.sleep(60)  # Wait before retrying
-                    continue
+    # Start the monitor thread
+    stop_monitor_thread = threading.Thread(target=monitor_stops, daemon=True)
+    stop_monitor_thread.start()
 
-            # Run entry scan if it's time
-            run_entries_if_time()
+    logger.info("Scheduler started; will enter trades after 3 PM ET each trading day.")
 
-            # Wait for next check
-            time.sleep(60)
+    try:
+        while not exit_event.is_set():
+            try:
+                # Check connection status
+                if not ib.isConnected():
+                    logger.error("IB connection lost. Attempting to reconnect...")
+                    try:
+                        connect_to_ib()
+                        logger.info("Reconnected to IB")
+                    except Exception as e:
+                        logger.error(f"Failed to reconnect: {e}")
+                        time.sleep(60)  # Wait before retrying
+                        continue
 
-        except Exception as e:
-            logger.error(f"Error in main loop: {e}")
-            time.sleep(60)  # Continue despite errors
+                # Run entry scan if it's time
+                run_entries_if_time()
 
-except KeyboardInterrupt:
-    logger.info("Stop signal received. Shutting down...")
-    exit_event.set()  # Signal threads to exit
-    logger.info("Waiting for monitor thread to exit...")
-    stop_monitor_thread.join(timeout=10)  # Wait for monitor thread with timeout
-    ib.disconnect()
-    logger.info("Disconnected from IB. Exiting.")
+                # Wait for next check
+                time.sleep(60)
+
+            except Exception as e:
+                logger.error(f"Error in main loop: {e}")
+                time.sleep(60)  # Continue despite errors
+
+    except KeyboardInterrupt:
+        logger.info("Stop signal received. Shutting down...")
+        exit_event.set()  # Signal threads to exit
+        logger.info("Waiting for monitor thread to exit...")
+        stop_monitor_thread.join(timeout=10)  # Wait for monitor thread with timeout
+        ib.disconnect()
+        logger.info("Disconnected from IB. Exiting.")
+
+
+# Only run this code when the script is executed directly
+if __name__ == "__main__":
+    # Run the main loop
+    main()
 
 
 # Create the main class for importing in tests and applications

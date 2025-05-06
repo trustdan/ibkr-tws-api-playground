@@ -201,131 +201,104 @@ def scan_securities(ib, symbols, scan_name, condition_func, config):
 
 
 def bull_pullback_condition(df):
-    """
-    Bull pullback condition function (vectorized)
+    """Bull pullback condition function"""
+    today, y1, y2 = df.iloc[-1], df.iloc[-2], df.iloc[-3]
 
-    Returns:
-        tuple: (bool_result, data_dict)
+    # Two bullish candles
+    two_bullish = y2.close > y2.open and y1.close > y1.open
 
-    Criteria:
-        - Two consecutive bullish candles (close > open)
-        - Pullback to rising 50-day moving average
-    """
-    if len(df) < 3:
-        return False, {}
+    # Pullback to rising 50MA
+    ma_rising = df.MA50.iloc[-1] > df.MA50.iloc[-2]
+    price_at_ma = today.low <= today.MA50
 
-    # Create boolean masks
-    bullish_candles = df["close"] > df["open"]
-
-    # Check for two consecutive bullish candles
-    two_bullish = bullish_candles.shift(2) & bullish_candles.shift(1)
-
-    # Check for rising MA and price at MA
-    ma_rising = df["MA50"] > df["MA50"].shift(1)
-    price_at_ma = df["low"] <= df["MA50"]
-
-    # Combine all conditions
-    condition_met = two_bullish & ma_rising & price_at_ma
-
-    # Return result for the last day
-    return bool(condition_met.iloc[-1]), {}
+    return (two_bullish and ma_rising and price_at_ma), {}
 
 
 def bear_rally_condition(df):
-    """
-    Bear rally condition function (vectorized)
+    """Bear rally condition function"""
+    today, y1, y2 = df.iloc[-1], df.iloc[-2], df.iloc[-3]
 
-    Returns:
-        tuple: (bool_result, data_dict)
+    # Two bearish candles
+    two_bearish = y2.close < y2.open and y1.close < y1.open
 
-    Criteria:
-        - Two consecutive bearish candles (close < open)
-        - Rally to falling 50-day moving average
-    """
-    if len(df) < 3:
-        return False, {}
+    # Rally into falling 50MA
+    ma_falling = df.MA50.iloc[-1] < df.MA50.iloc[-2]
+    price_at_ma = today.high >= today.MA50
 
-    # Create boolean masks
-    bearish_candles = df["close"] < df["open"]
-
-    # Check for two consecutive bearish candles
-    two_bearish = bearish_candles.shift(2) & bearish_candles.shift(1)
-
-    # Check for falling MA and price at MA
-    ma_falling = df["MA50"] < df["MA50"].shift(1)
-    price_at_ma = df["high"] >= df["MA50"]
-
-    # Combine all conditions
-    condition_met = two_bearish & ma_falling & price_at_ma
-
-    # Return result for the last day
-    return bool(condition_met.iloc[-1]), {}
+    return (two_bearish and ma_falling and price_at_ma), {}
 
 
 def high_base_condition(df):
-    """
-    High base condition function (vectorized)
+    """High base condition function (vectorized)"""
+    # Calculate additional indicators if they don't exist
+    if "52w_high" not in df.columns:
+        df["52w_high"] = df["close"].rolling(252, min_periods=50).max()
 
-    Returns:
-        tuple: (bool_result, data_dict)
+    if "ATR_ratio" not in df.columns:
+        if "ATR14" not in df.columns:
+            # Simple approximation for ATR if not available
+            df["ATR14"] = df["high"] - df["low"]
+        df["ATR_ratio"] = df["ATR14"] / df["ATR14"].rolling(20, min_periods=10).mean()
 
-    Criteria:
-        - Price near 52-week high (within configured percentage)
-        - Low volatility (ATR below historical average)
-        - Tight consolidation (narrow range)
-    """
+    if "range_pct" not in df.columns:
+        df["range_pct"] = (df["high"] - df["low"]) / df["close"] * 100
+
     if len(df) < 20:  # Need at least 20 days for moving averages
         return False, {}
 
-    config_values = {
-        "price_threshold": 0.95,  # Within 5% of 52-week high
-        "atr_threshold": 0.8,  # ATR below 80% of average
-        "range_threshold": 0.8,  # Range below 80% of average
-    }
+    # Create boolean masks for each condition (using default CONFIG values)
+    PRICE_NEAR_HIGH_PCT = 0.95  # Price must be within 5% of 52-week high
+    HIGH_BASE_MAX_ATR_RATIO = 0.8  # Max ATR ratio for high/low base
+    TIGHT_RANGE_FACTOR = 0.8  # Daily range must be below this % of average
 
-    # Create boolean masks for each condition
-    near_highs = df["close"] >= config_values["price_threshold"] * df["52w_high"]
-    low_volatility = df["ATR_ratio"] < config_values["atr_threshold"]
-    tight_range = df["range_ratio"] < config_values["range_threshold"]
+    near_highs = df["close"] >= PRICE_NEAR_HIGH_PCT * df["52w_high"]
+    low_volatility = df["ATR_ratio"] < HIGH_BASE_MAX_ATR_RATIO
+    tight_range = (
+        df["range_pct"] < df["range_pct"].rolling(20, min_periods=10).mean() * TIGHT_RANGE_FACTOR
+    )
 
     # Combine all conditions
     condition_met = near_highs & low_volatility & tight_range
 
     # Return result for the last day
-    return bool(condition_met.iloc[-1]), config_values
+    return bool(condition_met.iloc[-1]), {}
 
 
 def low_base_condition(df):
-    """
-    Low base condition function (vectorized)
+    """Low base condition function (vectorized)"""
+    # Calculate additional indicators if they don't exist
+    if "52w_low" not in df.columns:
+        df["52w_low"] = df["close"].rolling(252, min_periods=50).min()
 
-    Returns:
-        tuple: (bool_result, data_dict)
+    if "ATR_ratio" not in df.columns:
+        if "ATR14" not in df.columns:
+            # Simple approximation for ATR if not available
+            df["ATR14"] = df["high"] - df["low"]
+        df["ATR_ratio"] = df["ATR14"] / df["ATR14"].rolling(20, min_periods=10).mean()
 
-    Criteria:
-        - Price near 52-week low (within configured percentage)
-        - Low volatility (ATR below historical average)
-        - Tight consolidation (narrow range)
-    """
+    if "range_pct" not in df.columns:
+        df["range_pct"] = (df["high"] - df["low"]) / df["close"] * 100
+
     if len(df) < 20:  # Need at least 20 days for moving averages
         return False, {}
 
-    config_values = {
-        "price_threshold": 1.05,  # Within 5% of 52-week low
-        "atr_threshold": 0.8,  # ATR below 80% of average
-        "range_threshold": 0.8,  # Range below 80% of average
-    }
+    # Create boolean masks for each condition (using default CONFIG values)
+    PRICE_NEAR_LOW_PCT = 1.05  # Price must be within 5% of 52-week low
+    HIGH_BASE_MAX_ATR_RATIO = 0.8  # Max ATR ratio for high/low base
+    TIGHT_RANGE_FACTOR = 0.8  # Daily range must be below this % of average
 
-    # Create boolean masks for each condition
-    near_lows = df["close"] <= config_values["price_threshold"] * df["52w_low"]
-    low_volatility = df["ATR_ratio"] < config_values["atr_threshold"]
-    tight_range = df["range_ratio"] < config_values["range_threshold"]
+    near_lows = df["close"] <= PRICE_NEAR_LOW_PCT * df["52w_low"]
+    low_volatility = df["ATR_ratio"] < HIGH_BASE_MAX_ATR_RATIO
+
+    # Calculate the rolling average of range percentage
+    range_avg = df["range_pct"].rolling(20, min_periods=10).mean()
+    tight_range = df["range_pct"] < range_avg * TIGHT_RANGE_FACTOR
 
     # Combine all conditions
     condition_met = near_lows & low_volatility & tight_range
 
     # Return result for the last day
-    return bool(condition_met.iloc[-1]), config_values
+    return bool(condition_met.iloc[-1]), {}
 
 
 # --- Scan functions ---

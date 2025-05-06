@@ -12,7 +12,7 @@ from pathlib import Path
 # Add the parent directory to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scans import (
+from auto_vertical_spread_trader.scans import (
     bull_pullback_condition,
     bear_rally_condition,
     high_base_condition,
@@ -122,7 +122,10 @@ class TestScanConditions(unittest.TestCase):
         self.df.iloc[-1, self.df.columns.get_loc("ATR_ratio")] = 0.7
 
         # Tight range
-        self.df.iloc[-1, self.df.columns.get_loc("range_ratio")] = 0.7
+        self.df["range_pct"] = (self.df["high"] - self.df["low"]) / self.df["close"] * 100
+        # Make range tighter than average
+        avg_range = self.df["range_pct"].rolling(20, min_periods=1).mean().iloc[-1]
+        self.df.iloc[-1, self.df.columns.get_loc("range_pct")] = avg_range * 0.7
 
         result, _ = high_base_condition(self.df)
         self.assertTrue(result)
@@ -138,7 +141,10 @@ class TestScanConditions(unittest.TestCase):
         self.df.iloc[-1, self.df.columns.get_loc("ATR_ratio")] = 0.7
 
         # Tight range
-        self.df.iloc[-1, self.df.columns.get_loc("range_ratio")] = 0.7
+        self.df["range_pct"] = (self.df["high"] - self.df["low"]) / self.df["close"] * 100
+        # Make range tighter than average
+        avg_range = self.df["range_pct"].rolling(20, min_periods=1).mean().iloc[-1]
+        self.df.iloc[-1, self.df.columns.get_loc("range_pct")] = avg_range * 0.7
 
         result, _ = low_base_condition(self.df)
         self.assertTrue(result)

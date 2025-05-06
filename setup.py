@@ -36,7 +36,7 @@ setup(
         "requests>=2.25.0",
         "lxml>=4.6.3",
         "python-dotenv>=0.19.0",
-        "TA-Lib>=0.4.24",  # Proper TA-Lib installation is required
+        "pandas-ta>=0.3.14b0",  # Using pandas-ta instead of TA-Lib
     ],
     extras_require={
         "dev": [

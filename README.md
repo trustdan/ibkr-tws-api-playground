@@ -40,7 +40,37 @@ All trades include automated stop losses based on ATR.
 
 TA-Lib is a critical dependency for this system and requires a two-step installation: the C library must be installed first, followed by the Python wrapper.
 
-#### Windows
+#### Recommended Method: Bootstrap Script
+
+We provide a bootstrap script that automates the entire TA-Lib installation process:
+
+```bash
+# Clone the repository if you haven't already
+git clone https://github.com/yourusername/auto-vertical-spread-trader.git
+cd auto-vertical-spread-trader
+
+# Make the script executable
+chmod +x scripts/bootstrap_talib.sh
+
+# Run the bootstrap script
+./scripts/bootstrap_talib.sh
+```
+
+This script will:
+- Detect your operating system
+- Install necessary dependencies
+- Download and compile the C library
+- Create required symlinks
+- Install the Python wrapper
+- Verify the installation works correctly
+
+For Windows users, the script will recommend using pre-built wheels instead.
+
+#### Manual Installation Methods
+
+If you prefer to install manually or the bootstrap script doesn't work for your environment:
+
+##### Windows
 
 1. **Using pre-built wheels** (recommended):
    - Download the appropriate wheel from [Christoph Gohlke's repository](https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib)
@@ -185,8 +215,17 @@ trader.run_entries_if_time()
 Common issues and solutions:
 
 - **Connection Errors**: Ensure TWS/Gateway is running and API connections are enabled (Configure > API > Settings)
-- **TA-Lib Import Errors**: Check the detailed installation instructions above for your operating system
+
+- **TA-Lib Installation Issues**: 
+  - If encountering import errors, first try our `scripts/bootstrap_talib.sh` script
+  - For "undefined symbol" errors on Linux, ensure the C library and Python wrapper versions match
+  - Common error: `ImportError: libta_lib.so.0: cannot open shared object file`
+    - Run `sudo ldconfig` after installation to update the shared library cache
+    - Check that symlinks exist: `ls -l /usr/lib/libta-lib.so*`
+  - For Windows, using pre-built wheels is strongly recommended
+
 - **Rate Limiting**: If you encounter "Pacing Violation" errors, increase the `QUERY_DELAY` in config.py
+
 - **Missing Data**: For "No market data permissions" errors, ensure your IB account is subscribed to relevant data feeds
 
 Check `auto_trader.log` for detailed error information.

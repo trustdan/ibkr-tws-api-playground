@@ -1,248 +1,172 @@
 #!/bin/bash
-# TA-Lib verification script
-# Quickly checks if TA-Lib is properly installed and functioning
-# Usage: ./scripts/verify_talib.sh
+# Comprehensive TA-Lib verification script
+# This script runs extended tests on TA-Lib functionality
+# Usage: bash scripts/verify_talib.sh
 
 set -e  # Exit on any error
 
-echo "TA-Lib Verification Script"
-echo "=========================="
+# Define terminal colors
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# Check for the C library
-echo "Checking for TA-Lib C library..."
-FOUND_LIB=0
+echo -e "${BLUE}==========================================${NC}"
+echo -e "${BLUE}Comprehensive TA-Lib Verification Script${NC}"
+echo -e "${BLUE}==========================================${NC}"
 
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # First detect if we're on Debian or Ubuntu
-    if [ -f "/etc/debian_version" ]; then
-        DEBIAN_VERSION=$(cat /etc/debian_version)
-        if grep -q "Ubuntu" /etc/issue 2>/dev/null; then
-            echo "Detected Ubuntu-based system"
-            DISTRO="ubuntu"
-        else
-            echo "Detected Debian-based system (version: $DEBIAN_VERSION)"
-            DISTRO="debian"
-        fi
-        
-        # Check if the package is installed
-        if [ "$DISTRO" = "debian" ] && dpkg -l | grep -q "ta-lib-dev"; then
-            echo "✓ Found ta-lib-dev package (Debian)"
-        elif [ "$DISTRO" = "ubuntu" ] && dpkg -l | grep -q "libta-lib-dev"; then
-            echo "✓ Found libta-lib-dev package (Ubuntu)"
-        fi
-    fi
-    
-    # Linux - check both dash and underscore variants
-    if [ -f "/usr/lib/libta-lib.so" ]; then
-        echo "✓ Found libta-lib.so"
-        # Check for required symbols
-        if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
-            echo "✓ TA_AVGDEV_Lookback symbol found in libta-lib.so"
-            FOUND_LIB=1
-        else
-            echo "✗ TA_AVGDEV_Lookback symbol NOT found in libta-lib.so"
-        fi
-    elif [ -f "/usr/lib/libta_lib.so" ]; then
-        echo "✓ Found libta_lib.so (underscore version)"
-        # Check for required symbols
-        if nm -D /usr/lib/libta_lib.so | grep -q "TA_AVGDEV_Lookback"; then
-            echo "✓ TA_AVGDEV_Lookback symbol found in libta_lib.so"
-            echo "! Warning: Python wrapper expects libta-lib.so (with dash)"
-            echo "! Run: sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so && sudo ldconfig"
-            FOUND_LIB=1
-        else
-            echo "✗ TA_AVGDEV_Lookback symbol NOT found in libta_lib.so"
-        fi
-    else
-        echo "✗ Neither libta-lib.so nor libta_lib.so found"
-    fi
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS - check both system and homebrew locations with dynamic prefix detection
-    if command -v brew &> /dev/null; then
-        PREFIX=$(brew --prefix ta-lib 2>/dev/null || echo "/usr/local")
-        echo "Checking for TA-Lib in Homebrew prefix: $PREFIX"
-        
-        LIB_PATHS=(
-            "$PREFIX/lib/libta_lib.dylib"
-            "$PREFIX/lib/libta-lib.dylib"
-            "/usr/local/lib/libta_lib.dylib"
-            "/usr/local/lib/libta-lib.dylib"
-        )
-    else
-        LIB_PATHS=(
-            "/usr/local/lib/libta_lib.dylib"
-            "/usr/local/lib/libta-lib.dylib"
-        )
-    fi
-    
-    for lib_path in "${LIB_PATHS[@]}"; do
-        if [ -f "$lib_path" ]; then
-            echo "✓ Found $lib_path"
-            FOUND_LIB=1
-            break
-        fi
-    done
-    
-    if [ "$FOUND_LIB" -eq 0 ]; then
-        echo "✗ TA-Lib C library not found in standard locations"
-        echo "! Try: brew install ta-lib"
-        echo "! Then: export LDFLAGS=\"-L\$(brew --prefix ta-lib)/lib\" CPPFLAGS=\"-I\$(brew --prefix ta-lib)/include\""
-    fi
-elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    # Windows - check for Python wheel installation and provide better guidance
-    echo "! Windows system detected - checking for TA-Lib Python wheel"
-    
-    # Try to use Powershell if available for better Windows detection
-    if command -v powershell &>/dev/null; then
-        PYTHON_SITE=$(powershell -Command "python -c 'import site; print(site.getsitepackages()[0])'")
-        PYTHON_VERSION=$(powershell -Command "python -c 'import sys; print(f\"{sys.version_info.major}{sys.version_info.minor}\")'")
-        ARCH="win_amd64"  # Assume 64-bit Windows
-        
-        if [ -d "$PYTHON_SITE/talib" ]; then
-            echo "✓ Found TA-Lib in Python site-packages (wheel installation)"
-            FOUND_LIB=1
-        fi
-    else
-        # Fallback to assuming it might be installed
-        echo "! PowerShell not available, skipping detailed check"
-        echo "! Assuming wheel installation might be present"
-        FOUND_LIB=1
-    fi
-    
-    if [ "$FOUND_LIB" -eq 0 ]; then
-        echo "✗ TA-Lib not found in Python site-packages"
-        echo "! On Windows, install TA-Lib using one of these methods:"
-        
-        if [ -n "$PYTHON_VERSION" ]; then
-            echo "! 1. Download and install a pre-built wheel:"
-            echo "!    pip install https://github.com/TA-Lib/ta-lib-python/releases/download/TA_Lib-0.4.28/TA_Lib-0.4.28-cp${PYTHON_VERSION}-cp${PYTHON_VERSION}-${ARCH}.whl"
-        else
-            echo "! 1. Download and install a pre-built wheel matching your Python version"
-        fi
-        
-        echo "! 2. Install from conda-forge (if using Anaconda/Miniconda):"
-        echo "!    conda install -c conda-forge ta-lib"
-    fi
-else
-    echo "? Unknown OS type: $OSTYPE"
-    echo "? Skipping C library check"
-fi
+# Check Python version
+PYTHON_VERSION=$(python --version)
+echo -e "Python version: ${YELLOW}$PYTHON_VERSION${NC}"
 
-# Check for Python wrapper
-echo -e "\nChecking for TA-Lib Python wrapper..."
+# Check platform
+PLATFORM=$(python -c "import platform; print(platform.platform())")
+echo -e "Platform: ${YELLOW}$PLATFORM${NC}"
 
-# Determine Python executable (use python3 on *nix, python on Windows)
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    PYTHON_CMD="python"
-else
-    # Try python3 first, fallback to python if not found
-    if command -v python3 &>/dev/null; then
-        PYTHON_CMD="python3"
-    else
-        PYTHON_CMD="python"
-    fi
-fi
+# Create a temporary Python script for comprehensive verification
+VERIFY_SCRIPT=$(cat << 'EOF'
+import sys
+import numpy as np
+import platform
+import traceback
 
-# Check if talib can be imported
-if $PYTHON_CMD -c "import talib" 2>/dev/null; then
-    echo "✓ Python wrapper imports successfully"
+def test_talib():
+    print(f"\nRunning comprehensive TA-Lib tests...")
+    success_count = 0
+    failure_count = 0
+    tests = []
     
-    # Expanded test for multiple indicators to ensure comprehensive functionality
-    if $PYTHON_CMD -c "
-import talib, numpy as np
-try:
-    # Create test data
-    data = np.random.random(100)
-    high, low, close = np.random.random((3, 100)), np.random.random((3, 100)), np.random.random((3, 100))
-    volume = np.random.random(100) * 1000
-    
-    print('Testing common TA-Lib indicators:')
-    
-    # Test SMA calculation (moving average)
-    sma = talib.SMA(close, timeperiod=14)
-    print('✓ SMA: OK (shape:', sma.shape, ')')
-    
-    # Test RSI calculation (momentum)
-    rsi = talib.RSI(close, timeperiod=14)
-    print('✓ RSI: OK (shape:', rsi.shape, ')')
-    
-    # Test MACD calculation (trend)
-    macd, macd_signal, macd_hist = talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
-    print('✓ MACD: OK (shape:', macd.shape, ')')
-    
-    # Test Bollinger Bands (volatility)
-    upper, middle, lower = talib.BBANDS(close, timeperiod=20, nbdevup=2, nbdevdn=2)
-    print('✓ BBANDS: OK (shape:', upper.shape, ')')
-    
-    # Test ATR calculation (volatility)
-    atr = talib.ATR(high, low, close, timeperiod=14)
-    print('✓ ATR: OK (shape:', atr.shape, ')')
-    
-    # Test Stochastic Oscillator (momentum)
-    slowk, slowd = talib.STOCH(high, low, close, fastk_period=5, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)
-    print('✓ STOCH: OK (shape:', slowk.shape, ')')
-    
-    # Test ADX (trend strength)
-    adx = talib.ADX(high, low, close, timeperiod=14)
-    print('✓ ADX: OK (shape:', adx.shape, ')')
-    
-    # Test OBV (volume)
-    obv = talib.OBV(close, volume.astype(int))
-    print('✓ OBV: OK (shape:', obv.shape, ')')
-    
-    # Test AVGDEV (previously problematic)
-    if hasattr(talib, 'AVGDEV'):
-        avgdev = talib.AVGDEV(close, timeperiod=14)
-        print('✓ AVGDEV: OK (shape:', avgdev.shape, ')')
-    else:
-        print('⚠ AVGDEV: Not available in this TA-Lib build')
-    
-    print('✓ All indicator tests completed successfully')
-    print('Available functions:', len(talib.get_functions()))
-    
-except Exception as e:
-    print('Error running TA-Lib functions:', e)
-    exit(1)
-" 2>/dev/null; then
-        echo "✓ Comprehensive indicator test successful"
-    else
-        echo "✗ Comprehensive indicator test failed (wrapper installed but not working correctly)"
-        exit 1
-    fi
-else
-    echo "✗ Python wrapper import failed"
-    if [ "$FOUND_LIB" -eq 1 ]; then
-        echo "! C library found but Python wrapper missing or broken"
+    try:
+        import talib
+        from talib import abstract
+        print(f"TA-Lib version: {talib.__version__}")
+        print(f"Available functions: {len(talib.get_functions())}")
         
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            echo "! For macOS, make sure to set the dynamic prefix:"
-            echo "! export LDFLAGS=\"-L\$(brew --prefix ta-lib)/lib\" CPPFLAGS=\"-I\$(brew --prefix ta-lib)/include\""
-            echo "! pip install --no-build-isolation TA-Lib"
-        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            echo "! For Linux, create symbolic links if needed:"
-            echo "! sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so"
-            echo "! sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0"
-            echo "! sudo ldconfig"
-            echo "! pip install TA-Lib"
-        else
-            echo "! Run: pip install TA-Lib"
-        fi
-    else
-        echo "! Both C library and Python wrapper are missing"
-        echo "! Run: ./scripts/bootstrap_talib.sh"
-    fi
-    exit 1
-fi
+        # Test data generation
+        print("\nGenerating test data...")
+        data_length = 200
+        close = np.random.random(data_length)
+        open_price = np.random.random(data_length)
+        high = np.maximum(close, open_price) + np.random.random(data_length) * 0.1
+        low = np.minimum(close, open_price) - np.random.random(data_length) * 0.1
+        volume = np.random.random(data_length) * 1000
+        
+        # Generate test cases for various function groups
+        tests = [
+            # Moving Averages
+            {"name": "SMA", "func": lambda: talib.SMA(close, timeperiod=14)},
+            {"name": "EMA", "func": lambda: talib.EMA(close, timeperiod=14)},
+            {"name": "WMA", "func": lambda: talib.WMA(close, timeperiod=14)},
+            {"name": "DEMA", "func": lambda: talib.DEMA(close, timeperiod=14)},
+            {"name": "TEMA", "func": lambda: talib.TEMA(close, timeperiod=14)},
+            {"name": "TRIMA", "func": lambda: talib.TRIMA(close, timeperiod=14)},
+            {"name": "KAMA", "func": lambda: talib.KAMA(close, timeperiod=14)},
+            {"name": "MAMA", "func": lambda: talib.MAMA(close, fastlimit=0.5, slowlimit=0.05)},
+            
+            # Momentum Indicators
+            {"name": "RSI", "func": lambda: talib.RSI(close, timeperiod=14)},
+            {"name": "MACD", "func": lambda: talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)},
+            {"name": "STOCH", "func": lambda: talib.STOCH(high, low, close, fastk_period=5, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)},
+            {"name": "STOCHRSI", "func": lambda: talib.STOCHRSI(close, timeperiod=14, fastk_period=5, fastd_period=3, fastd_matype=0)},
+            {"name": "ADX", "func": lambda: talib.ADX(high, low, close, timeperiod=14)},
+            {"name": "ADXR", "func": lambda: talib.ADXR(high, low, close, timeperiod=14)},
+            {"name": "CCI", "func": lambda: talib.CCI(high, low, close, timeperiod=14)},
+            {"name": "MOM", "func": lambda: talib.MOM(close, timeperiod=10)},
+            
+            # Volume Indicators
+            {"name": "OBV", "func": lambda: talib.OBV(close, volume.astype(int))},
+            {"name": "AD", "func": lambda: talib.AD(high, low, close, volume)},
+            {"name": "ADOSC", "func": lambda: talib.ADOSC(high, low, close, volume, fastperiod=3, slowperiod=10)},
+            
+            # Volatility Indicators
+            {"name": "ATR", "func": lambda: talib.ATR(high, low, close, timeperiod=14)},
+            {"name": "NATR", "func": lambda: talib.NATR(high, low, close, timeperiod=14)},
+            {"name": "TRANGE", "func": lambda: talib.TRANGE(high, low, close)},
+            {"name": "BBANDS", "func": lambda: talib.BBANDS(close, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)},
+            
+            # Pattern Recognition
+            {"name": "CDL3INSIDE", "func": lambda: talib.CDL3INSIDE(open_price, high, low, close)},
+            {"name": "CDLENGULFING", "func": lambda: talib.CDLENGULFING(open_price, high, low, close)},
+            {"name": "CDLHAMMER", "func": lambda: talib.CDLHAMMER(open_price, high, low, close)},
+            
+            # Abstract API Test
+            {"name": "Abstract RSI", "func": lambda: abstract.RSI(close, timeperiod=14)},
+            {"name": "Abstract MACD", "func": lambda: abstract.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)},
+        ]
+        
+        print(f"\nRunning {len(tests)} indicator tests:")
+        print("=" * 50)
+        
+        # Run all tests
+        for test in tests:
+            try:
+                result = test["func"]()
+                if isinstance(result, tuple):
+                    # Check if all values in the tuple are valid arrays
+                    all_valid = all(isinstance(arr, np.ndarray) and not np.isnan(arr).all() for arr in result)
+                    if all_valid:
+                        success_count += 1
+                        print(f"✓ {test['name']} - Success")
+                    else:
+                        failure_count += 1
+                        print(f"✗ {test['name']} - Array contains all NaN values")
+                else:
+                    # Check if the result is a valid array
+                    if isinstance(result, np.ndarray) and not np.isnan(result).all():
+                        success_count += 1
+                        print(f"✓ {test['name']} - Success")
+                    else:
+                        failure_count += 1
+                        print(f"✗ {test['name']} - Result invalid or contains all NaN values")
+            except Exception as e:
+                failure_count += 1
+                print(f"✗ {test['name']} - Failed: {str(e)}")
+                traceback.print_exc()
+        
+        print("=" * 50)
+        print(f"Total tests: {len(tests)}")
+        print(f"Successful: {success_count}")
+        print(f"Failed: {failure_count}")
+        
+        if failure_count == 0:
+            print("\n✅ All TA-Lib tests passed successfully!")
+            return True
+        else:
+            print(f"\n❌ {failure_count} tests failed.")
+            return False
+            
+    except ImportError as e:
+        print(f"Failed to import TA-Lib: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        traceback.print_exc()
+        return False
 
-# Run quick smoke test
-echo -e "\nRunning quick smoke test:"
-$PYTHON_CMD - <<EOF
-import talib, numpy as np
-sma_result = talib.SMA(np.arange(10))
-print("SMA quick test:", sma_result[0:3])
-if sma_result.shape[0] == 10:
-    print("✓ Quick smoke test passed")
+if __name__ == "__main__":
+    success = test_talib()
+    sys.exit(0 if success else 1)
 EOF
+)
 
-echo -e "\n✅ TA-Lib verification successful!"
-exit 0 
+# Write the verification script to a temporary file
+TEMP_FILE=$(mktemp)
+echo "$VERIFY_SCRIPT" > "$TEMP_FILE"
+
+# Run the comprehensive verification
+echo -e "\n${BLUE}Running comprehensive TA-Lib tests...${NC}"
+python "$TEMP_FILE"
+TEST_RESULT=$?
+
+# Clean up
+rm "$TEMP_FILE"
+
+# Final status
+if [ $TEST_RESULT -eq 0 ]; then
+    echo -e "\n${GREEN}✅ TA-Lib verification completed successfully!${NC}"
+    exit 0
+else
+    echo -e "\n${RED}❌ TA-Lib verification failed!${NC}"
+    exit 1
+fi 

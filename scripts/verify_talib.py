@@ -78,9 +78,10 @@ def verify_talib():
     # Run basic indicator tests
     print("\nRunning indicator tests...")
     try:
-        # Create test data
-        data = np.random.random(100)
-        high, low, close = np.random.random((3, 100)), np.random.random((3, 100)), np.random.random((3, 100))
+        # Create test data - all arrays should be 1D
+        close = np.random.random(100)
+        high = np.random.random(100)
+        low = np.random.random(100)
         volume = np.random.random(100) * 1000
         
         # Test SMA calculation (moving average)
@@ -130,8 +131,8 @@ def verify_talib():
     # Run quick smoke test
     print("\nRunning quick smoke test:")
     try:
-        sma_result = talib.SMA(np.arange(10))
-        print_colored(f"SMA quick test: {sma_result[0:3]}", "info")
+        sma_result = talib.SMA(np.arange(10, dtype=float))
+        print_colored(f"SMA quick test: {sma_result[5:]}", "info")
         if sma_result.shape[0] == 10:
             print_colored("Quick smoke test passed", "success")
     except Exception as e:

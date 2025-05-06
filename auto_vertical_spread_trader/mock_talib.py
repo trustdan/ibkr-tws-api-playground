@@ -2,19 +2,37 @@
 TA-Lib compatibility layer using pandas-ta under the hood.
 
 This module provides a drop-in replacement for TA-Lib functions using pandas-ta.
-It can be used as a bridge during migration or to support legacy code.
+It helps with transitioning from TA-Lib to pandas-ta by providing a compatible API.
+Prefer using pandas-ta directly in new code.
+
+IMPORTANT: This is a transitional module. In the future, code should directly use pandas-ta
+with its native DataFrame-centric API rather than this compatibility layer.
 
 Usage:
+    # For transition only - prefer pandas-ta's native API for new code
     import auto_vertical_spread_trader.mock_talib as talib
     
     # Use just like regular TA-Lib
     df['ATR14'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+    
+    # Better approach for new code:
+    import pandas_ta as ta
+    df['ATR14'] = df.ta.atr(length=14)
 """
 
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
 from typing import Tuple, List, Optional, Union
+import warnings
+
+# Emit deprecation warning when module is imported
+warnings.warn(
+    "The mock_talib module is a transitional compatibility layer. "
+    "Please use pandas-ta directly with its native API in new code.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 # Create a list of function names for compatibility with talib.get_functions()
 _FUNCTIONS = [

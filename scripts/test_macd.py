@@ -4,6 +4,7 @@
 
 import sys
 import numpy as np
+import pandas as pd
 import platform
 
 def test_macd():
@@ -13,11 +14,10 @@ def test_macd():
     print(f"Platform: {platform.platform()}")
     
     try:
-        # Import TA-Lib
-        import talib
-        from talib import abstract
+        # Import pandas-ta
+        import pandas_ta as ta
         
-        print(f"TA-Lib version: {talib.__version__}")
+        print(f"pandas-ta is available")
         
         # Create test data with sufficient length for MACD
         data_length = 300  # MACD requires longer history to initialize
@@ -34,71 +34,38 @@ def test_macd():
             noise = np.random.normal(0, 0.5)  # Small random noise
             close[i] = close[i-1] * (1 + trend/100 + noise/100)
         
-        # Test standard MACD
-        print("\nTesting standard MACD function:")
-        macd, macdsignal, macdhist = talib.MACD(
-            close, 
-            fastperiod=12, 
-            slowperiod=26, 
-            signalperiod=9
-        )
+        # Create pandas DataFrame
+        df = pd.DataFrame({'close': close})
+        
+        # Test MACD using pandas-ta
+        print("\nTesting pandas-ta MACD function:")
+        macd_result = ta.macd(df['close'], fast=12, slow=26, signal=9)
         
         # Check for NaN values
-        nan_count = np.sum(np.isnan(macd))
-        valid_count = len(macd) - nan_count
-        print(f"MACD output shape: {macd.shape}")
-        print(f"NaN values: {nan_count}, Valid values: {valid_count}")
-        print(f"First 5 valid values: {macd[~np.isnan(macd)][:5]}")
-        
-        if valid_count > 0:
-            print("✓ Standard MACD: Success")
-        else:
-            print("✗ Standard MACD: All values are NaN")
-        
-        # Test abstract MACD
-        print("\nTesting abstract MACD function:")
-        
-        # Convert to the format expected by abstract API (dict with 'close' key)
-        input_data = {'close': close}
-        
-        # Call abstract MACD
-        macd_result = abstract.MACD(
-            input_data,
-            fastperiod=12, 
-            slowperiod=26, 
-            signalperiod=9
-        )
-        
-        if isinstance(macd_result, dict):
-            # For newer versions that return a dict
-            print("Abstract API returned a dictionary")
-            for key, arr in macd_result.items():
+        if macd_result is not None:
+            for column in macd_result.columns:
+                arr = macd_result[column].values
                 nan_count = np.sum(np.isnan(arr))
                 valid_count = len(arr) - nan_count
-                print(f"{key} - Shape: {arr.shape}, NaN: {nan_count}, Valid: {valid_count}")
-                
-            has_valid_values = any(np.sum(~np.isnan(arr)) > 0 for arr in macd_result.values())
-        else:
-            # For older versions that return a tuple
-            print("Abstract API returned a tuple")
-            macd, macdsignal, macdhist = macd_result
+                print(f"{column} - Shape: {arr.shape}, NaN: {nan_count}, Valid: {valid_count}")
+                if valid_count > 0:
+                    print(f"First 5 valid values for {column}: {arr[~np.isnan(arr)][:5]}")
             
-            for i, (name, arr) in enumerate([("macd", macd), ("signal", macdsignal), ("hist", macdhist)]):
-                nan_count = np.sum(np.isnan(arr))
-                valid_count = len(arr) - nan_count
-                print(f"{name} - Shape: {arr.shape}, NaN: {nan_count}, Valid: {valid_count}")
+            has_valid_values = any(np.sum(~np.isnan(macd_result[col].values)) > 0 for col in macd_result.columns)
             
-            has_valid_values = np.sum(~np.isnan(macd)) > 0 or np.sum(~np.isnan(macdsignal)) > 0 or np.sum(~np.isnan(macdhist)) > 0
-        
-        if has_valid_values:
-            print("✓ Abstract MACD: Success")
-            return True
+            if has_valid_values:
+                print("✓ pandas-ta MACD: Success")
+                return True
+            else:
+                print("✗ pandas-ta MACD: All values are NaN")
+                return False
         else:
-            print("✗ Abstract MACD: All values are NaN")
+            print("✗ pandas-ta MACD: Function returned None")
             return False
         
     except ImportError as e:
-        print(f"Failed to import TA-Lib: {e}")
+        print(f"Failed to import pandas-ta: {e}")
+        print("To install pandas-ta, run: pip install pandas-ta>=0.3.0b0")
         return False
     except Exception as e:
         print(f"Unexpected error: {e}")

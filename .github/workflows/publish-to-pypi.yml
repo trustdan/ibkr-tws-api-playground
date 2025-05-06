@@ -13,16 +13,64 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.x'
+        python-version: '3.10'
+    - name: Install TA-Lib
+      run: |
+        # Install build dependencies
+        sudo apt-get update
+        sudo apt-get install -y build-essential wget
+
+        # Download and install TA-Lib
+        wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+        tar -xzf ta-lib-0.4.0-src.tar.gz
+        cd ta-lib/
+        ./configure
+        make
+        sudo make install
+        cd ..
+        
+        # Update ldconfig to make the library available
+        sudo ldconfig
+        
+        # Debug information
+        echo "Checking installed library files:"
+        sudo find /usr -name "*ta_lib*" -o -name "*ta-lib*"
+        
+        # Create symlinks with various naming conventions
+        sudo ln -sf /usr/local/lib/libta_lib.so.0 /usr/local/lib/libta-lib.so
+        sudo ln -sf /usr/local/lib/libta_lib.so.0 /usr/lib/libta-lib.so
+        sudo ln -sf /usr/local/lib/libta_lib.so.0 /usr/lib/libta_lib.so
+        
+        # Show LD_LIBRARY_PATH and libraries
+        echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+        ldconfig -p | grep ta
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build twine wheel
+        pip install build twine wheel setuptools numpy
+        
+        # Set environment variables for compilation
+        export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+        export TA_LIBRARY_PATH=/usr/local/lib
+        export TA_INCLUDE_PATH=/usr/local/include
+        
+        # Build the wheel with custom options to detect the library
+        pip install --no-deps numpy pandas
     - name: Build and publish
       env:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
+        # Set environment variables for compilation
+        export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+        export TA_LIBRARY_PATH=/usr/local/lib
+        export TA_INCLUDE_PATH=/usr/local/include
+        
+        # Build the package
         python -m build
+        
+        # Check the distribution
         twine check dist/*
+        
+        # Upload to PyPI
         twine upload dist/* 

@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 import pandas_ta as ta
 from typing import Tuple, List, Optional, Union
+from numpy.typing import NDArray
 import warnings
 
 # Emit deprecation warning when module is imported
@@ -75,49 +76,49 @@ def __version__():
 # ----- Moving Averages -----
 
 
-def SMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def SMA(close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Simple Moving Average using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.sma(length=timeperiod)
     return result.to_numpy()
 
 
-def EMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def EMA(close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Exponential Moving Average using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.ema(length=timeperiod)
     return result.to_numpy()
 
 
-def WMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def WMA(close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Weighted Moving Average using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.wma(length=timeperiod)
     return result.to_numpy()
 
 
-def DEMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def DEMA(close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Double Exponential Moving Average using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.dema(length=timeperiod)
     return result.to_numpy()
 
 
-def TEMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def TEMA(close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Triple Exponential Moving Average using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.tema(length=timeperiod)
     return result.to_numpy()
 
 
-def TRIMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def TRIMA(close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Triangular Moving Average using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.trima(length=timeperiod)
     return result.to_numpy()
 
 
-def KAMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def KAMA(close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Kaufman Adaptive Moving Average using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.kama(length=timeperiod)
@@ -126,7 +127,7 @@ def KAMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
 
 def MAMA(
     close: np.ndarray, fastlimit: float = 0.5, slowlimit: float = 0.05
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[NDArray, NDArray]:
     """MESA Adaptive Moving Average using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.mama(fast=fastlimit, slow=slowlimit)
@@ -137,7 +138,7 @@ def MAMA(
 # ----- Momentum Indicators -----
 
 
-def RSI(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def RSI(close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Relative Strength Index using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.rsi(length=timeperiod)
@@ -146,7 +147,7 @@ def RSI(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
 
 def MACD(
     close: np.ndarray, fastperiod: int = 12, slowperiod: int = 26, signalperiod: int = 9
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[NDArray, NDArray, NDArray]:
     """Moving Average Convergence/Divergence using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.macd(fast=fastperiod, slow=slowperiod, signal=signalperiod)
@@ -167,7 +168,7 @@ def STOCH(
     slowk_matype: int = 0,
     slowd_period: int = 3,
     slowd_matype: int = 0,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[NDArray, NDArray]:
     """Stochastic Oscillator using pandas-ta."""
     df = pd.DataFrame({"high": high, "low": low, "close": close})
     result = df.ta.stoch(k=fastk_period, d=slowd_period, smooth_k=slowk_period)
@@ -184,7 +185,7 @@ def STOCHRSI(
     fastk_period: int = 5,
     fastd_period: int = 3,
     fastd_matype: int = 0,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[NDArray, NDArray]:
     """Stochastic RSI using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.stochrsi(
@@ -197,14 +198,14 @@ def STOCHRSI(
     )
 
 
-def ADX(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def ADX(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Average Directional Movement Index using pandas-ta."""
     df = pd.DataFrame({"high": high, "low": low, "close": close})
     result = df.ta.adx(length=timeperiod)
     return result["ADX_14"].to_numpy()
 
 
-def ADXR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def ADXR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Average Directional Movement Index Rating using pandas-ta."""
     df = pd.DataFrame({"high": high, "low": low, "close": close})
     # pandas-ta doesn't have a direct ADXR function, so we calculate it
@@ -214,14 +215,14 @@ def ADXR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int =
     return adxr.to_numpy()
 
 
-def CCI(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def CCI(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Commodity Channel Index using pandas-ta."""
     df = pd.DataFrame({"high": high, "low": low, "close": close})
     result = df.ta.cci(length=timeperiod)
     return result.to_numpy()
 
 
-def MOM(close: np.ndarray, timeperiod: int = 10) -> np.ndarray:
+def MOM(close: np.ndarray, timeperiod: int = 10) -> NDArray:
     """Momentum using pandas-ta."""
     df = pd.DataFrame({"close": close})
     result = df.ta.mom(length=timeperiod)
@@ -231,14 +232,14 @@ def MOM(close: np.ndarray, timeperiod: int = 10) -> np.ndarray:
 # ----- Volume Indicators -----
 
 
-def OBV(close: np.ndarray, volume: np.ndarray) -> np.ndarray:
+def OBV(close: np.ndarray, volume: np.ndarray) -> NDArray:
     """On Balance Volume using pandas-ta."""
     df = pd.DataFrame({"close": close, "volume": volume})
     result = df.ta.obv()
     return result.to_numpy()
 
 
-def AD(high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray) -> np.ndarray:
+def AD(high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray) -> NDArray:
     """Chaikin A/D Line using pandas-ta."""
     df = pd.DataFrame({"high": high, "low": low, "close": close, "volume": volume})
     result = df.ta.ad()
@@ -252,7 +253,7 @@ def ADOSC(
     volume: np.ndarray,
     fastperiod: int = 3,
     slowperiod: int = 10,
-) -> np.ndarray:
+) -> NDArray:
     """Chaikin A/D Oscillator using pandas-ta."""
     df = pd.DataFrame({"high": high, "low": low, "close": close, "volume": volume})
     result = df.ta.adosc(fast=fastperiod, slow=slowperiod)
@@ -262,14 +263,14 @@ def ADOSC(
 # ----- Volatility Indicators -----
 
 
-def ATR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def ATR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Average True Range using pandas-ta."""
     df = pd.DataFrame({"high": high, "low": low, "close": close})
     result = df.ta.atr(length=timeperiod)
     return result.to_numpy()
 
 
-def NATR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+def NATR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> NDArray:
     """Normalized Average True Range using pandas-ta."""
     df = pd.DataFrame({"high": high, "low": low, "close": close})
     atr = df.ta.atr(length=timeperiod)
@@ -278,7 +279,7 @@ def NATR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int =
     return natr.to_numpy()
 
 
-def TRANGE(high: np.ndarray, low: np.ndarray, close: np.ndarray) -> np.ndarray:
+def TRANGE(high: np.ndarray, low: np.ndarray, close: np.ndarray) -> NDArray:
     """True Range using pandas-ta."""
     df = pd.DataFrame({"high": high, "low": low, "close": close})
     result = df.ta.true_range()
@@ -287,7 +288,7 @@ def TRANGE(high: np.ndarray, low: np.ndarray, close: np.ndarray) -> np.ndarray:
 
 def BBANDS(
     close: np.ndarray, timeperiod: int = 20, nbdevup: float = 2, nbdevdn: float = 2, matype: int = 0
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[NDArray, NDArray, NDArray]:
     """Bollinger Bands using pandas-ta."""
     df = pd.DataFrame({"close": close})
     # For simplicity, we ignore matype as pandas-ta defaults to SMA

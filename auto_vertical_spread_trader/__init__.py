@@ -7,3 +7,5 @@ for bull pullbacks, bear rallies, high base, and low base trading strategies.
 """
 
 __version__ = "1.0.0"
+
+from auto_vertical_spread_trader.auto_vertical_spread_trader import AutoVerticalSpreadTrader

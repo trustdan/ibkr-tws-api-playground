@@ -12,6 +12,7 @@ from threading import Event
 import traceback
 import os
 import pickle
+from typing import Dict, Any
 
 # --- CONFIG ---
 CONFIG = {
@@ -547,7 +548,7 @@ stop_monitor_thread.start()
 
 
 # --- 6. Schedule your entry scan at 3 PM ET every trading day ---
-spreadBook = {}
+spreadBook: Dict[str, Dict[str, Any]] = {}
 tz = pytz.timezone("US/Eastern")
 lastRunDate = None
 

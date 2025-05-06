@@ -45,6 +45,9 @@ jobs:
         # Install numpy<2.0.0 first to fix pandas-ta compatibility
         pip install "numpy>=1.20.0,<2.0.0" --no-cache-dir
         
+        # Install type stubs for mypy
+        pip install types-pytz --no-cache-dir
+        
         # Explicitly install pandas-ta
         pip install pandas-ta>=0.3.0b0 --no-cache-dir
         
@@ -110,6 +113,9 @@ jobs:
         # Install numpy<2.0.0 first to fix pandas-ta compatibility
         pip install "numpy>=1.20.0,<2.0.0" --no-cache-dir
         
+        # Install type stubs for mypy
+        pip install types-pytz --no-cache-dir
+        
         # Explicitly install pandas-ta
         pip install pandas-ta>=0.3.0b0 --no-cache-dir
         
@@ -156,6 +162,9 @@ jobs:
         
         # Install numpy<2.0.0 first to fix pandas-ta compatibility
         pip install "numpy>=1.20.0,<2.0.0" --no-cache-dir
+        
+        # Install type stubs for mypy
+        pip install types-pytz --no-cache-dir
         
         # Explicitly install pandas-ta
         pip install pandas-ta>=0.3.0b0 --no-cache-dir

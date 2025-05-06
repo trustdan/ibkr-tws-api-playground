@@ -12,6 +12,11 @@ import sys
 import numpy as np
 import pandas as pd
 
+# Add debugging information
+print(f"Python version: {sys.version}")
+print(f"Python executable: {sys.executable}")
+print(f"Path: {sys.path}")
+
 # ANSI color codes for colored output
 COLORS = {
     "red": "\033[91m",
@@ -40,8 +45,8 @@ def main():
     try:
         import pandas_ta as ta
 
-        print_colored(f"pandas-ta is installed", "success")
-        print_colored(f"Available categories: {list(ta.Category.keys())}", "success")
+        print_colored(f"pandas-ta is installed", "green")
+        print_colored(f"Available categories: {list(ta.Category.keys())}", "green")
     except ImportError:
         print_colored("pandas-ta is not installed!", "red")
         print_colored("To install pandas-ta, run: pip install pandas-ta", "yellow")
@@ -63,65 +68,65 @@ def main():
     # Test SMA
     try:
         sma = df.ta.sma(length=14)
-        print_colored("✓ SMA calculation successful", "green")
+        print_colored("[PASS] SMA calculation successful", "green")
     except Exception as e:
-        print_colored(f"✗ SMA calculation failed: {e}", "red")
+        print_colored(f"[FAIL] SMA calculation failed: {e}", "red")
         return 1
 
     # Test RSI
     try:
         rsi = df.ta.rsi(length=14)
-        print_colored("✓ RSI calculation successful", "green")
+        print_colored("[PASS] RSI calculation successful", "green")
     except Exception as e:
-        print_colored(f"✗ RSI calculation failed: {e}", "red")
+        print_colored(f"[FAIL] RSI calculation failed: {e}", "red")
         return 1
 
     # Test MACD
     try:
         macd = df.ta.macd(fast=12, slow=26, signal=9)
-        print_colored("✓ MACD calculation successful", "green")
+        print_colored("[PASS] MACD calculation successful", "green")
     except Exception as e:
-        print_colored(f"✗ MACD calculation failed: {e}", "red")
+        print_colored(f"[FAIL] MACD calculation failed: {e}", "red")
         return 1
 
     # Test Bollinger Bands
     try:
         bbands = df.ta.bbands(length=20, std=2)
-        print_colored("✓ Bollinger Bands calculation successful", "green")
+        print_colored("[PASS] Bollinger Bands calculation successful", "green")
     except Exception as e:
-        print_colored(f"✗ Bollinger Bands calculation failed: {e}", "red")
+        print_colored(f"[FAIL] Bollinger Bands calculation failed: {e}", "red")
         return 1
 
     # Test ATR - critical for our trading strategy
     try:
         atr = df.ta.atr(length=14)
-        print_colored("✓ ATR calculation successful", "green")
+        print_colored("[PASS] ATR calculation successful", "green")
     except Exception as e:
-        print_colored(f"✗ ATR calculation failed: {e}", "red")
+        print_colored(f"[FAIL] ATR calculation failed: {e}", "red")
         return 1
 
     # Test Stochastic
     try:
         stoch = df.ta.stoch(k=5, d=3, smooth_k=3)
-        print_colored("✓ Stochastic calculation successful", "green")
+        print_colored("[PASS] Stochastic calculation successful", "green")
     except Exception as e:
-        print_colored(f"✗ Stochastic calculation failed: {e}", "red")
+        print_colored(f"[FAIL] Stochastic calculation failed: {e}", "red")
         return 1
 
     # Test ADX
     try:
         adx = df.ta.adx(length=14)
-        print_colored("✓ ADX calculation successful", "green")
+        print_colored("[PASS] ADX calculation successful", "green")
     except Exception as e:
-        print_colored(f"✗ ADX calculation failed: {e}", "red")
+        print_colored(f"[FAIL] ADX calculation failed: {e}", "red")
         return 1
 
     # Test OBV
     try:
         obv = df.ta.obv()
-        print_colored("✓ OBV calculation successful", "green")
+        print_colored("[PASS] OBV calculation successful", "green")
     except Exception as e:
-        print_colored(f"✗ OBV calculation failed: {e}", "red")
+        print_colored(f"[FAIL] OBV calculation failed: {e}", "red")
         return 1
 
     # Test multiple indicators at once
@@ -129,12 +134,12 @@ def main():
         print_colored("Testing strategy with multiple indicators...", "blue")
         # Apply a set of indicators
         df.ta.strategy("All")
-        print_colored("✓ Strategy application successful", "green")
+        print_colored("[PASS] Strategy application successful", "green")
     except Exception as e:
-        print_colored(f"✗ Strategy application failed: {e}", "red")
+        print_colored(f"[FAIL] Strategy application failed: {e}", "red")
         # This is not critical, so don't fail the test
 
-    print_colored("\n✓ pandas-ta verification complete: ALL TESTS PASSED", "green")
+    print_colored("\n[PASS] pandas-ta verification complete: ALL TESTS PASSED", "green")
     print_colored("\nYou can now use pandas-ta in your trading strategy.", "blue")
     print_colored("Example usage:", "yellow")
     print_colored("  import pandas as pd", "yellow")

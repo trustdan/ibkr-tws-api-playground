@@ -1,6 +1,6 @@
 # Auto Vertical Spread Trader
 
-[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/yourusername/auto-vertical-spread-trader/graphs/commit-activity)
 [![Tests](https://github.com/yourusername/auto-vertical-spread-trader/actions/workflows/python-tests.yml/badge.svg)](https://github.com/yourusername/auto-vertical-spread-trader/actions/workflows/python-tests.yml)
@@ -30,11 +30,55 @@ All trades include automated stop losses based on ATR.
 
 ## Requirements
 
-- Python 3.7+
+- Python 3.8+
 - Interactive Brokers account with TWS or IB Gateway
 - TA-Lib (technical analysis library)
 
 ## Installation
+
+### 1. Installing TA-Lib
+
+TA-Lib is a critical dependency for this system and requires a two-step installation: the C library must be installed first, followed by the Python wrapper.
+
+#### Windows
+
+1. **Using pre-built wheels** (recommended):
+   - Download the appropriate wheel from [Christoph Gohlke's repository](https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib)
+   - Select the version matching your Python version and architecture (e.g., `TA_Lib-0.4.27-cp39-cp39-win_amd64.whl`)
+   - Install with pip:
+     ```
+     pip install TA_Lib-0.4.27-cp39-cp39-win_amd64.whl
+     ```
+
+2. **Building from source**:
+   - Download TA-Lib C library from [TA-Lib.org](https://ta-lib.org/hdr_dw.html)
+   - Unzip to `C:\ta-lib`
+   - Add to environment variables: `LIB` path should include `C:\ta-lib\lib`, and `INCLUDE` should include `C:\ta-lib\include`
+   - Install the Python wrapper: `pip install ta-lib`
+
+#### macOS
+
+Using Homebrew:
+```
+brew install ta-lib
+pip install ta-lib
+```
+
+#### Linux (Ubuntu/Debian)
+
+```
+sudo apt-get update
+sudo apt-get install -y build-essential autoconf libtool pkg-config
+wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+tar -xzf ta-lib-0.4.0-src.tar.gz
+cd ta-lib/
+./configure --prefix=/usr
+make
+sudo make install
+pip install ta-lib
+```
+
+### 2. Installing the Package
 
 1. Clone the repository:
    ```
@@ -49,14 +93,9 @@ All trades include automated stop losses based on ATR.
    pip install -r requirements.txt
    ```
 
-3. If needed, install TA-Lib ([see instructions](https://github.com/mrjbq7/ta-lib)):
-   - Windows: Use pre-built wheels or conda
-   - Mac: `brew install ta-lib` then pip install
-   - Linux: Install system package first, then pip install
-   
-4. For development, install the extra dependencies:
-   ```
-   pip install -e ".[dev]"
+3. Verify TA-Lib installation:
+   ```python
+   python -c "import talib; print('TA-Lib installed successfully!')"
    ```
 
 ## Configuration
@@ -146,7 +185,7 @@ trader.run_entries_if_time()
 Common issues and solutions:
 
 - **Connection Errors**: Ensure TWS/Gateway is running and API connections are enabled (Configure > API > Settings)
-- **TA-Lib Import Errors**: Check [installation guide](https://github.com/mrjbq7/ta-lib) for your OS-specific instructions
+- **TA-Lib Import Errors**: Check the detailed installation instructions above for your operating system
 - **Rate Limiting**: If you encounter "Pacing Violation" errors, increase the `QUERY_DELAY` in config.py
 - **Missing Data**: For "No market data permissions" errors, ensure your IB account is subscribed to relevant data feeds
 

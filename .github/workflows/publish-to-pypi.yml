@@ -14,66 +14,45 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
-    - name: Install TA-Lib
+    - name: Install TA-Lib C library
       run: |
         # Install build dependencies
         sudo apt-get update
-        sudo apt-get install -y build-essential wget
+        sudo apt-get install -y build-essential autoconf libtool pkg-config
 
-        # Download and install TA-Lib
+        # Download and install TA-Lib from source
         wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
         tar -xzf ta-lib-0.4.0-src.tar.gz
         cd ta-lib/
-        ./configure
+        ./configure --prefix=/usr
         make
         sudo make install
-        cd ..
         
-        # Update ldconfig to make the library available
+        # Update linker cache
         sudo ldconfig
         
-        # Debug information
-        echo "Checking installed library files:"
-        sudo find /usr -name "*ta_lib*" -o -name "*ta-lib*"
-        
-        # Create symlinks with various naming conventions
-        sudo ln -sf /usr/local/lib/libta_lib.so.0 /usr/local/lib/libta-lib.so
-        sudo ln -sf /usr/local/lib/libta_lib.so.0 /usr/lib/libta-lib.so
-        sudo ln -sf /usr/local/lib/libta_lib.so.0 /usr/lib/libta_lib.so
-        
-        # Show LD_LIBRARY_PATH and libraries
-        echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
-        ldconfig -p | grep ta
-    - name: Install dependencies
+        # Verify installation
+        ls -la /usr/lib/libta_lib*
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        # Install build and packaging tools
         python -m pip install build twine wheel setuptools
         
-        # Install numpy and pandas (needed for TA-Lib)
-        pip install numpy pandas
+        # Install TA-Lib Python wrapper
+        export TA_LIBRARY_PATH=/usr/lib
+        export TA_INCLUDE_PATH=/usr/include
+        python -m pip install numpy pandas  # Dependencies for TA-Lib
+        python -m pip install TA-Lib
         
-        # Install mock_talib for fallback
-        mkdir -p auto_vertical_spread_trader
-        
-        # Try to install TA-Lib, but continue if it fails
-        export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-        pip install TA-Lib || echo "TA-Lib installation failed, will use mock on client side"
+        # Verify installation
+        python -c "import talib; print('TA-Lib installed successfully!')"
     - name: Build and publish
       env:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
-        # Set environment variables for compilation
-        export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-        export TA_LIBRARY_PATH=/usr/local/lib
-        export TA_INCLUDE_PATH=/usr/local/include
-        
-        # Build source distribution
-        python setup.py sdist
-        
-        # Build wheel using build module
-        python -m build --wheel
+        # Build both wheel and source distribution
+        python -m build
         
         # List contents of dist directory
         ls -la dist/

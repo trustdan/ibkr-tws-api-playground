@@ -20,93 +20,46 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install TA-Lib
+    - name: Install TA-Lib C library
       run: |
         # Install build dependencies
         sudo apt-get update
-        sudo apt-get install -y build-essential wget
+        sudo apt-get install -y build-essential autoconf libtool pkg-config
 
-        # Download and install TA-Lib
+        # Download and install TA-Lib from source
         wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
         tar -xzf ta-lib-0.4.0-src.tar.gz
         cd ta-lib/
-        ./configure
+        ./configure --prefix=/usr
         make
         sudo make install
-        cd ..
         
-        # Update ldconfig to make the library available
+        # Update linker cache
         sudo ldconfig
         
-        # Debug information
-        echo "Checking installed library files:"
-        sudo find /usr -name "*ta_lib*" -o -name "*ta-lib*"
-        
-        # Create symlinks with various naming conventions
-        sudo ln -sf /usr/local/lib/libta_lib.so.0 /usr/local/lib/libta-lib.so
-        sudo ln -sf /usr/local/lib/libta_lib.so.0 /usr/lib/libta-lib.so
-        sudo ln -sf /usr/local/lib/libta_lib.so.0 /usr/lib/libta_lib.so
-        
-        # Show LD_LIBRARY_PATH and libraries
-        echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
-        ldconfig -p | grep ta
-    - name: Install dependencies
+        # Verify installation
+        ls -la /usr/lib/libta_lib*
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install flake8 pytest pytest-cov black mypy numpy
-        python -m pip install build wheel setuptools
+        python -m pip install wheel setuptools pytest pytest-cov flake8 black mypy
         
-        # Install common dependencies
-        pip install pandas numpy ib_insync
-
-        # Install required dependencies from requirements file
+        # Install Python TA-Lib wrapper and other dependencies
+        export TA_LIBRARY_PATH=/usr/lib
+        export TA_INCLUDE_PATH=/usr/include
+        python -m pip install numpy  # Ensure numpy is installed first
+        python -m pip install TA-Lib  # Install the Python wrapper
+        
+        # Verify TA-Lib installation
+        python -c "import talib; print('TA-Lib version:', talib.__version__); print('Available functions:', talib.get_functions()[:5])"
+        
+        # Install other dependencies
         if [ -f requirements.txt ]; then
-          grep -v "TA-Lib" requirements.txt > requirements_filtered.txt
-          pip install -r requirements_filtered.txt
+          pip install -r requirements.txt
         fi
         
-        # Install TA-Lib Python wrapper with specific flags
-        export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-        pip install TA-Lib || echo "TA-Lib installation failed, will use mock"
-        
-        # Install pytest and related packages
-        pip install pytest pytest-cov
-        
-        # Install development dependencies without the package itself
-        pip install black flake8 mypy
-    - name: Setup test environment
-      run: |
-        # Copy mock_talib to the importable location
-        mkdir -p auto_vertical_spread_trader
-        cp auto_vertical_spread_trader/mock_talib.py auto_vertical_spread_trader/
-        
-        # Create a conftest.py file for pytest to handle TA-Lib imports
-        cat > tests/conftest.py << 'EOF'
-        import sys
-        import os
-        import pytest
-
-        @pytest.fixture(scope="session", autouse=True)
-        def setup_testing_environment():
-            """
-            Set up the testing environment, including handling TA-Lib imports
-            """
-            # Try to import TA-Lib
-            try:
-                import talib
-                print("Using real TA-Lib")
-            except ImportError:
-                # If TA-Lib is not available, use the mock
-                print("TA-Lib not available, using mock")
-                try:
-                    from auto_vertical_spread_trader.mock_talib import patch_talib
-                    patch_talib()
-                except Exception as e:
-                    print(f"Failed to apply mock TA-Lib: {str(e)}")
-            
-            # Set CI environment variable
-            os.environ['CI'] = 'true'
-        EOF
+        # Install package in development mode
+        pip install -e .
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
@@ -121,8 +74,7 @@ jobs:
         mypy --ignore-missing-imports .
     - name: Test with pytest
       run: |
-        # Add PYTHONPATH to ensure modules can be found
-        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        # Run tests with coverage
         pytest --cov=auto_vertical_spread_trader --cov-report=xml --cov-report=term --cov-fail-under=80
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3

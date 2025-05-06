@@ -169,4 +169,4 @@ if [ $TEST_RESULT -eq 0 ]; then
 else
     echo -e "\n${RED}❌ TA-Lib verification failed!${NC}"
     exit 1
-fi 
+fi

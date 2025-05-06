@@ -136,7 +136,7 @@ else {
 Write-Host "Installing TA-Lib from conda-forge..."
 # Add extra flags for CI environments
 if ($CI_ENV) {
-    conda install -y -c conda-forge ta-lib numpy --no-update-deps
+    conda install -y -c conda-forge ta-lib numpy --no-deps
     
     # If that fails, try specifying the exact version
     if ($LASTEXITCODE -ne 0) {

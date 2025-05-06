@@ -27,22 +27,33 @@ jobs:
         ./configure --prefix=/usr
         make
         sudo make install
+        cd ..
         
         # Update linker cache
         sudo ldconfig
         
+        # Create symlink for the Python wrapper to find the library
+        sudo find /usr -name "libta_lib.so*" -type f
+        sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
+        sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+        
         # Verify installation
-        ls -la /usr/lib/libta_lib*
+        find /usr/lib -name "libta*"
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         python -m pip install build twine wheel setuptools
         
-        # Install TA-Lib Python wrapper
+        # Install NumPy and Pandas (required for TA-Lib)
+        python -m pip install numpy pandas
+        
+        # Set library paths and install TA-Lib
         export TA_LIBRARY_PATH=/usr/lib
         export TA_INCLUDE_PATH=/usr/include
-        python -m pip install numpy pandas  # Dependencies for TA-Lib
-        python -m pip install TA-Lib
+        export LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
+        
+        # Install TA-Lib Python wrapper
+        python -m pip install --no-build-isolation TA-Lib
         
         # Verify installation
         python -c "import talib; print('TA-Lib installed successfully!')"

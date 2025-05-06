@@ -1,5 +1,13 @@
 # TA-Lib Installation Guide
 
+**⚠️ DEPRECATION NOTICE ⚠️**
+
+**This guide is obsolete. The project has migrated from TA-Lib to pandas-ta for technical indicators.**
+
+**Please refer to the main README.md for current installation instructions with pandas-ta.**
+
+---
+
 TA-Lib (Technical Analysis Library) is a widely used library for technical analysis of financial market data. This guide provides cross-platform installation solutions for the common issues encountered when installing TA-Lib.
 
 ## Understanding TA-Lib

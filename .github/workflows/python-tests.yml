@@ -33,7 +33,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ${{ steps.pip-cache.outputs.dir }}
-        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}-pandas-ta
         restore-keys: |
           ${{ runner.os }}-pip-${{ matrix.python-version }}-
       
@@ -42,16 +42,19 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install wheel setuptools pytest pytest-cov flake8 black mypy
         
+        # Explicitly install pandas-ta first
+        pip install pandas-ta>=0.3.0b0 --no-cache-dir
+        
         # Install other dependencies
         if [ -f requirements.txt ]; then
-          pip install -r requirements.txt
+          pip install -r requirements.txt --no-cache-dir
         fi
         
         # Install package in development mode
         pip install -e .
         
-        # Explicitly install pandas-ta
-        pip install pandas-ta>=0.3.0b0
+        # Verify pandas-ta is installed and importable
+        python -c "import pandas_ta; print(f'pandas-ta {pandas_ta.__version__} installed successfully')"
     
     - name: Verify pandas-ta installation
       run: |
@@ -93,7 +96,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/Library/Caches/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}-pandas-ta
         restore-keys: |
           ${{ runner.os }}-pip-
     
@@ -101,13 +104,16 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         
+        # Explicitly install pandas-ta first
+        pip install pandas-ta>=0.3.0b0 --no-cache-dir
+        
         # Install test dependencies and package
         pip install pytest
-        pip install -r requirements.txt
+        pip install -r requirements.txt --no-cache-dir
         pip install -e .
         
-        # Explicitly install pandas-ta
-        pip install pandas-ta>=0.3.0b0
+        # Verify pandas-ta is installed and importable
+        python -c "import pandas_ta; print(f'pandas-ta {pandas_ta.__version__} installed successfully')"
     
     - name: Verify pandas-ta installation
       run: |
@@ -133,7 +139,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~\AppData\Local\pip\Cache
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}-pandas-ta
         restore-keys: |
           ${{ runner.os }}-pip-
     
@@ -141,13 +147,17 @@ jobs:
       shell: pwsh
       run: |
         pip install pytest
+        
+        # Explicitly install pandas-ta first
+        pip install pandas-ta>=0.3.0b0 --no-cache-dir
+        
         if (Test-Path -Path "requirements.txt") {
-          pip install -r requirements.txt
+          pip install -r requirements.txt --no-cache-dir
         }
         pip install -e .
         
-        # Explicitly install pandas-ta
-        pip install pandas-ta>=0.3.0b0
+        # Verify pandas-ta is installed and importable
+        python -c "import pandas_ta; print(f'pandas-ta {pandas_ta.__version__} installed successfully')"
     
     - name: Verify pandas-ta installation
       shell: pwsh

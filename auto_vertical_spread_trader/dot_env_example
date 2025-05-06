@@ -1,0 +1,20 @@
+# Example .env file for Auto Vertical Spread Trader
+# Copy to .env and fill in your values
+
+# Interactive Brokers credentials
+IB_ACCOUNT_ID=U1234567
+IB_HOST=127.0.0.1
+IB_PORT=7496  # Use 7496 for TWS, 4001 for IB Gateway
+
+# Email notifications (optional)
+EMAIL_ENABLED=True
+EMAIL_FROM=your-email@example.com
+EMAIL_TO=your-email@example.com
+EMAIL_PASSWORD=your-email-password
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+
+# Logging
+LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# Rename this file to .env to use it 

@@ -13,15 +13,24 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     echo "Detected Linux system"
     if command -v apt-get &> /dev/null; then
         echo "Detected Ubuntu/Debian-based system"
-        echo "Installing TA-Lib from system package (recommended method)..."
-        sudo apt-get update
-        sudo apt-get install -y libta-lib-dev
         
-        # Verify installation
-        if [ -f "/usr/lib/libta-lib.so" ] || [ -f "/usr/lib/libta-lib.so.0" ]; then
-            echo "TA-Lib C library installed successfully from package!"
+        # First check if libta-lib-dev is available in the repositories
+        sudo apt-get update
+        if apt-cache search libta-lib-dev | grep -q libta-lib-dev; then
+            echo "libta-lib-dev found in repositories, installing..."
+            sudo apt-get install -y libta-lib-dev
+            
+            # Verify installation
+            if [ -f "/usr/lib/libta-lib.so" ] || [ -f "/usr/lib/libta-lib.so.0" ]; then
+                echo "TA-Lib C library installed successfully from package!"
+            else
+                echo "System package installation failed, falling back to source installation..."
+                sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+                INSTALL_FROM_SOURCE=1
+            fi
         else
-            echo "System package installation failed, falling back to source installation..."
+            echo "libta-lib-dev not found in repositories (common on Ubuntu 24.04+)"
+            echo "Will install from source instead..."
             sudo apt-get install -y build-essential wget autoconf libtool pkg-config
             INSTALL_FROM_SOURCE=1
         fi

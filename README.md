@@ -44,10 +44,13 @@ TA-Lib is a critical dependency for this system and requires a two-step installa
 
 The simplest installation method depends on your operating system:
 
-**Ubuntu/Debian:**
+**Ubuntu/Debian (Ubuntu 22.04 or earlier):**
 ```bash
 sudo apt-get update && sudo apt-get install -y libta-lib-dev && pip install TA-Lib
 ```
+
+**Ubuntu 24.04 and newer:** 
+Ubuntu 24.04 (Noble Numbat) doesn't include the `libta-lib-dev` package, so you'll need to build from source (use our bootstrap script below).
 
 **macOS:**
 ```bash

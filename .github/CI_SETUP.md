@@ -10,9 +10,12 @@ TA-Lib consists of two components:
 
 ### Recommended Installation Method (Ubuntu/Debian)
 
-On Ubuntu-based CI runners (like GitHub Actions), we use the system package for TA-Lib which is the most reliable approach:
+On Ubuntu 22.04-based CI runners (like GitHub Actions), we use the system package for TA-Lib which is the most reliable approach:
 
 ```bash
+# Specify Ubuntu 22.04 in your workflow
+runs-on: ubuntu-22.04
+
 # Install the development package that includes headers and the shared library
 sudo apt-get update
 sudo apt-get install -y libta-lib-dev
@@ -20,6 +23,8 @@ sudo apt-get install -y libta-lib-dev
 # Install the Python wrapper
 pip install TA-Lib
 ```
+
+> **Note:** Ubuntu 24.04 (Noble Numbat) and newer versions do not include the `libta-lib-dev` package. For these environments, use the source installation method below.
 
 This approach ensures that:
 1. The C library and its headers are properly installed in standard system locations

@@ -7,11 +7,9 @@ on:
     branches: [ main ]
 
 jobs:
-  # Main test job using Debian container
+  # Main test job using Ubuntu container (no need for Debian since we don't need TA-Lib anymore)
   test:
     runs-on: ubuntu-latest
-    container:
-      image: debian:bookworm-slim
     strategy:
       fail-fast: false
       matrix:
@@ -20,22 +18,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Python
-      run: |
-        # Install Python and dependencies with minimal footprint
-        apt-get update
-        apt-get install -y --no-install-recommends python3 python3-pip python3-venv python3-dev build-essential wget ca-certificates sudo
-        
-        # Clean up apt cache to reduce container size
-        apt-get clean
-        rm -rf /var/lib/apt/lists/*
-        
-        # Create symlinks from Python to python3 for compatibility
-        ln -sf /usr/bin/python3 /usr/bin/python
-        ln -sf /usr/bin/pip3 /usr/bin/pip
-        
-        # Check Python version to ensure we're using the right one
-        python --version
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
     
     # Cache pip packages
     - name: Get pip cache directory
@@ -50,12 +36,6 @@ jobs:
         key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-${{ matrix.python-version }}-
-    
-    - name: Install TA-Lib using bootstrap script
-      run: |
-        chmod +x scripts/bootstrap_talib.sh
-        # Use sudo for system-wide installations in the script
-        sudo -E bash scripts/bootstrap_talib.sh
       
     - name: Install Python dependencies
       run: |
@@ -70,9 +50,9 @@ jobs:
         # Install package in development mode
         pip install -e .
     
-    - name: Verify TA-Lib installation
+    - name: Verify pandas-ta installation
       run: |
-        python scripts/verify_talib.py
+        python scripts/verify_pandas_ta.py
     
     - name: Lint with flake8
       run: |
@@ -94,7 +74,7 @@ jobs:
         # Run tests with coverage
         pytest --cov=auto_vertical_spread_trader --cov-report=xml --cov-report=term --cov-fail-under=80
 
-  # macOS build with Homebrew
+  # macOS build - simpler now without TA-Lib
   macos-build:
     runs-on: macos-latest
     steps:
@@ -105,15 +85,6 @@ jobs:
       with:
         python-version: '3.10'
     
-    # Cache Homebrew packages
-    - name: Cache Homebrew packages
-      uses: actions/cache@v3
-      with:
-        path: ~/Library/Caches/Homebrew
-        key: ${{ runner.os }}-brew-${{ hashFiles('.github/workflows/python-tests.yml') }}
-        restore-keys: |
-          ${{ runner.os }}-brew-
-    
     # Cache pip packages
     - name: Cache pip packages
       uses: actions/cache@v3
@@ -123,41 +94,24 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
     
-    # Check for macOS ARM architecture (GitHub hosted runners could eventually be Apple Silicon)
-    - name: Check CPU architecture
-      id: cpu-arch
-      run: |
-        ARCH=$(uname -m)
-        echo "Architecture detected: $ARCH"
-        echo "arch=$ARCH" >> $GITHUB_OUTPUT
-        # Set CONDA_SUBDIR if needed for ARM architecture
-        if [[ "$ARCH" == "arm64" ]]; then
-          echo "Setting CONDA_SUBDIR for Apple Silicon"
-          echo "CONDA_SUBDIR=osx-64" >> $GITHUB_ENV
-        fi
-    
-    - name: Install TA-Lib using bootstrap script
-      run: |
-        chmod +x scripts/bootstrap_talib.sh
-        bash scripts/bootstrap_talib.sh
-    
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         
         # Install test dependencies and package
         pip install pytest
+        pip install -r requirements.txt
         pip install -e .
     
-    - name: Verify TA-Lib installation
+    - name: Verify pandas-ta installation
       run: |
-        python scripts/verify_talib.py
+        python scripts/verify_pandas_ta.py
     
-    - name: Run comprehensive indicator tests
+    - name: Run tests
       run: |
-        bash scripts/verify_talib.sh
+        pytest
 
-  # Windows build using our PowerShell bootstrap script
+  # Windows build - simpler now without TA-Lib
   windows-build:
     runs-on: windows-latest
     steps:
@@ -177,14 +131,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
     
-    - name: Install TA-Lib using bootstrap script
-      shell: pwsh
-      run: |
-        # Set execution policy to allow script execution
-        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
-        # Run the bootstrap script
-        .\scripts\bootstrap_talib.ps1
-    
     - name: Install Python dependencies
       shell: pwsh
       run: |
@@ -194,23 +140,12 @@ jobs:
         }
         pip install -e .
     
-    - name: Verify TA-Lib installation
+    - name: Verify pandas-ta installation
       shell: pwsh
       run: |
-        python scripts/verify_talib.py
+        python scripts/verify_pandas_ta.py
     
-    - name: Run comprehensive indicator tests (if verify_talib.sh exists)
+    - name: Run tests
       shell: pwsh
       run: |
-        $env:PYTHONIOENCODING = "utf-8"
-        if (Test-Path -Path "scripts/verify_talib.sh") {
-          # Only try to run this if bash is available
-          if (Get-Command bash -ErrorAction SilentlyContinue) {
-            bash scripts/verify_talib.sh
-          } else {
-            Write-Host "Bash not available, using Python verification script instead"
-            python scripts/verify_talib.py
-          }
-        } else {
-          python scripts/verify_talib.py
-        } 
+        pytest 

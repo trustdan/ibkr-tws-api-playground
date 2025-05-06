@@ -1,110 +1,200 @@
 """
-Mock implementation of TA-Lib functions for testing environments
-where the actual TA-Lib cannot be installed.
+TA-Lib compatibility layer using pandas-ta under the hood.
 
-This provides enough functionality to run tests, but not for production use.
+This module provides a drop-in replacement for TA-Lib functions using pandas-ta.
+It can be used as a bridge during migration or to support legacy code.
+
+Usage:
+    import auto_vertical_spread_trader.mock_talib as talib
+    
+    # Use just like regular TA-Lib
+    df['ATR14'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
 """
 
 import numpy as np
 import pandas as pd
-import warnings
+import pandas_ta as ta
+from typing import Tuple, List, Optional, Union
 
-# Display a warning that we're using the mock version
-warnings.warn(
-    "Using mock_talib instead of real TA-Lib. This is only for testing/CI environments.",
-    UserWarning
-)
+# Create a list of function names for compatibility with talib.get_functions()
+_FUNCTIONS = [
+    'ATR', 'SMA', 'EMA', 'WMA', 'DEMA', 'TEMA', 'TRIMA', 'KAMA', 'MAMA',
+    'RSI', 'MACD', 'STOCH', 'STOCHRSI', 'ADX', 'ADXR', 'CCI', 'MOM',
+    'OBV', 'AD', 'ADOSC', 'NATR', 'TRANGE', 'BBANDS'
+]
 
-def SMA(values, timeperiod=30):
-    """Simple Moving Average mock implementation"""
-    values = np.asarray(values)
-    return pd.Series(values).rolling(window=timeperiod).mean().values
+def get_functions() -> List[str]:
+    """Return a list of supported function names."""
+    return _FUNCTIONS
 
-def EMA(values, timeperiod=30):
-    """Exponential Moving Average mock implementation"""
-    values = np.asarray(values)
-    return pd.Series(values).ewm(span=timeperiod, adjust=False).mean().values
+def __version__():
+    """Return pandas-ta version as a compatibility layer."""
+    return ta.__version__
 
-def RSI(values, timeperiod=14):
-    """Relative Strength Index mock implementation"""
-    values = pd.Series(values)
-    # Calculate price differences
-    delta = values.diff().dropna()
-    
-    # Calculate gains and losses
-    gains = delta.copy()
-    gains[gains < 0] = 0
-    losses = -delta.copy()
-    losses[losses < 0] = 0
-    
-    # Calculate average gains and losses
-    avg_gain = gains.rolling(window=timeperiod).mean()
-    avg_loss = losses.rolling(window=timeperiod).mean()
-    
-    # Calculate RS and RSI
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    
-    # Fill first timeperiod values with NaN
-    result = np.empty_like(values)
-    result[:] = np.nan
-    result[timeperiod:] = rsi[timeperiod:].values
-    
-    return result
+# ----- Moving Averages -----
 
-def BBANDS(values, timeperiod=5, nbdevup=2, nbdevdn=2, matype=0):
-    """Bollinger Bands mock implementation"""
-    values = np.asarray(values)
-    sma = SMA(values, timeperiod)
-    std = pd.Series(values).rolling(window=timeperiod).std().values
-    
-    upper = sma + nbdevup * std
-    middle = sma
-    lower = sma - nbdevdn * std
-    
-    return upper, middle, lower
+def SMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Simple Moving Average using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.sma(length=timeperiod)
+    return result.to_numpy()
 
-def ATR(high, low, close, timeperiod=14):
-    """Average True Range mock implementation"""
-    high = pd.Series(high)
-    low = pd.Series(low)
-    close = pd.Series(close)
-    
-    # Calculate True Range
-    prev_close = close.shift(1)
-    tr1 = high - low
-    tr2 = (high - prev_close).abs()
-    tr3 = (low - prev_close).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    
-    # Calculate ATR
-    atr = tr.rolling(window=timeperiod).mean().values
-    
-    # Fill first timeperiod values with NaN
-    result = np.empty_like(close)
-    result[:] = np.nan
-    result[timeperiod-1:] = atr[timeperiod-1:]
-    
-    return result
+def EMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Exponential Moving Average using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.ema(length=timeperiod)
+    return result.to_numpy()
 
-# Function to replace imported TA-Lib functions with mocks
-def patch_talib():
-    """
-    Apply monkey patching to modules that import TA-Lib.
-    This should be called at the start of tests when TA-Lib is not available.
-    """
-    import sys
-    
-    # Create a mock talib module
-    class MockTaLib:
-        SMA = SMA
-        EMA = EMA
-        RSI = RSI
-        BBANDS = BBANDS
-        ATR = ATR
-    
-    # Add it to sys.modules so imports use this instead
-    sys.modules['talib'] = MockTaLib
-    
-    print("Mock TA-Lib successfully applied. Functions available: SMA, EMA, RSI, BBANDS, ATR")
-    return True 
+def WMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Weighted Moving Average using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.wma(length=timeperiod)
+    return result.to_numpy()
+
+def DEMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Double Exponential Moving Average using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.dema(length=timeperiod)
+    return result.to_numpy()
+
+def TEMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Triple Exponential Moving Average using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.tema(length=timeperiod)
+    return result.to_numpy()
+
+def TRIMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Triangular Moving Average using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.trima(length=timeperiod)
+    return result.to_numpy()
+
+def KAMA(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Kaufman Adaptive Moving Average using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.kama(length=timeperiod)
+    return result.to_numpy()
+
+def MAMA(close: np.ndarray, fastlimit: float = 0.5, slowlimit: float = 0.05) -> Tuple[np.ndarray, np.ndarray]:
+    """MESA Adaptive Moving Average using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.mama(fast=fastlimit, slow=slowlimit)
+    # Return MAMA and FAMA as tuple for TA-Lib compatibility
+    return result['MAMA'].to_numpy(), result['FAMA'].to_numpy()
+
+# ----- Momentum Indicators -----
+
+def RSI(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Relative Strength Index using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.rsi(length=timeperiod)
+    return result.to_numpy()
+
+def MACD(close: np.ndarray, fastperiod: int = 12, slowperiod: int = 26, signalperiod: int = 9) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Moving Average Convergence/Divergence using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.macd(fast=fastperiod, slow=slowperiod, signal=signalperiod)
+    # Return MACD, Signal, and Histogram as tuple for TA-Lib compatibility
+    return result[f'MACD_{fastperiod}_{slowperiod}_{signalperiod}'].to_numpy(), \
+           result[f'MACDs_{fastperiod}_{slowperiod}_{signalperiod}'].to_numpy(), \
+           result[f'MACDh_{fastperiod}_{slowperiod}_{signalperiod}'].to_numpy()
+
+def STOCH(high: np.ndarray, low: np.ndarray, close: np.ndarray, 
+          fastk_period: int = 5, slowk_period: int = 3, slowk_matype: int = 0, 
+          slowd_period: int = 3, slowd_matype: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+    """Stochastic Oscillator using pandas-ta."""
+    df = pd.DataFrame({'high': high, 'low': low, 'close': close})
+    result = df.ta.stoch(k=fastk_period, d=slowd_period, smooth_k=slowk_period)
+    # For simplicity, we ignore the MA types as pandas-ta doesn't support them directly
+    return result[f'STOCHk_{fastk_period}_{slowk_period}_{slowd_period}'].to_numpy(), \
+           result[f'STOCHd_{fastk_period}_{slowk_period}_{slowd_period}'].to_numpy()
+
+def STOCHRSI(close: np.ndarray, timeperiod: int = 14, fastk_period: int = 5, 
+             fastd_period: int = 3, fastd_matype: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+    """Stochastic RSI using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.stochrsi(length=timeperiod, rsi_length=timeperiod, k=fastk_period, d=fastd_period)
+    # For simplicity, we ignore the MA types as pandas-ta doesn't support them directly
+    return result[f'STOCHRSIk_{timeperiod}_{fastk_period}_{fastd_period}'].to_numpy(), \
+           result[f'STOCHRSId_{timeperiod}_{fastk_period}_{fastd_period}'].to_numpy()
+
+def ADX(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Average Directional Movement Index using pandas-ta."""
+    df = pd.DataFrame({'high': high, 'low': low, 'close': close})
+    result = df.ta.adx(length=timeperiod)
+    return result['ADX_14'].to_numpy()
+
+def ADXR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Average Directional Movement Index Rating using pandas-ta."""
+    df = pd.DataFrame({'high': high, 'low': low, 'close': close})
+    # pandas-ta doesn't have a direct ADXR function, so we calculate it
+    adx = df.ta.adx(length=timeperiod)
+    # ADXR is the average of current ADX and ADX from 'timeperiod' periods ago
+    adxr = (adx['ADX_14'] + adx['ADX_14'].shift(timeperiod)) / 2
+    return adxr.to_numpy()
+
+def CCI(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Commodity Channel Index using pandas-ta."""
+    df = pd.DataFrame({'high': high, 'low': low, 'close': close})
+    result = df.ta.cci(length=timeperiod)
+    return result.to_numpy()
+
+def MOM(close: np.ndarray, timeperiod: int = 10) -> np.ndarray:
+    """Momentum using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    result = df.ta.mom(length=timeperiod)
+    return result.to_numpy()
+
+# ----- Volume Indicators -----
+
+def OBV(close: np.ndarray, volume: np.ndarray) -> np.ndarray:
+    """On Balance Volume using pandas-ta."""
+    df = pd.DataFrame({'close': close, 'volume': volume})
+    result = df.ta.obv()
+    return result.to_numpy()
+
+def AD(high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray) -> np.ndarray:
+    """Chaikin A/D Line using pandas-ta."""
+    df = pd.DataFrame({'high': high, 'low': low, 'close': close, 'volume': volume})
+    result = df.ta.ad()
+    return result.to_numpy()
+
+def ADOSC(high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray, 
+         fastperiod: int = 3, slowperiod: int = 10) -> np.ndarray:
+    """Chaikin A/D Oscillator using pandas-ta."""
+    df = pd.DataFrame({'high': high, 'low': low, 'close': close, 'volume': volume})
+    result = df.ta.adosc(fast=fastperiod, slow=slowperiod)
+    return result.to_numpy()
+
+# ----- Volatility Indicators -----
+
+def ATR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Average True Range using pandas-ta."""
+    df = pd.DataFrame({'high': high, 'low': low, 'close': close})
+    result = df.ta.atr(length=timeperiod)
+    return result.to_numpy()
+
+def NATR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
+    """Normalized Average True Range using pandas-ta."""
+    df = pd.DataFrame({'high': high, 'low': low, 'close': close})
+    atr = df.ta.atr(length=timeperiod)
+    # NATR = (ATR / CLOSE) * 100
+    natr = (atr / df['close']) * 100
+    return natr.to_numpy()
+
+def TRANGE(high: np.ndarray, low: np.ndarray, close: np.ndarray) -> np.ndarray:
+    """True Range using pandas-ta."""
+    df = pd.DataFrame({'high': high, 'low': low, 'close': close})
+    result = df.ta.true_range()
+    return result.to_numpy()
+
+def BBANDS(close: np.ndarray, timeperiod: int = 20, nbdevup: float = 2, nbdevdn: float = 2, 
+          matype: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Bollinger Bands using pandas-ta."""
+    df = pd.DataFrame({'close': close})
+    # For simplicity, we ignore matype as pandas-ta defaults to SMA
+    result = df.ta.bbands(length=timeperiod, std=nbdevup)  # assuming nbdevup = nbdevdn
+    # Return Upper, Middle, Lower as tuple for TA-Lib compatibility
+    return result[f'BBU_{timeperiod}_{nbdevup}.0'].to_numpy(), \
+           result[f'BBM_{timeperiod}_{nbdevup}.0'].to_numpy(), \
+           result[f'BBL_{timeperiod}_{nbdevup}.0'].to_numpy() 

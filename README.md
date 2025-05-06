@@ -22,15 +22,17 @@ All trades include automated stop losses based on ATR.
 
 ## Recent Updates
 
-- **Improved TA-Lib Installation**: We've enhanced TA-Lib installation across all platforms:
-  - Switched from Ubuntu to Debian for CI builds (more reliable `ta-lib-dev` package availability)
-  - Added dynamic Homebrew prefix detection for macOS (`brew --prefix ta-lib`)
-  - Enhanced Windows wheel installation with proper version detection
-  - Implemented comprehensive test suite for TA-Lib indicator verification
+- **Migrated from TA-Lib to pandas-ta**: We've replaced TA-Lib with pandas-ta for technical indicators:
+  - No C/C++ dependencies required
+  - Easier installation across all platforms
+  - DataFrame-centric API that's more intuitive
+  - Same functionality but with simpler code
 
-- **Comprehensive Verification**: Added `scripts/verify_talib.sh` to test 8+ indicator types and ensure proper library linking
+- **Improved Technical Analysis**: Enhanced indicator functionality with pandas-ta's extensive indicator library
+  
+- **Simplified Installation**: Removed complex TA-Lib installation requirements
 
-- **CI Performance**: Optimized CI builds with caching for pip and Homebrew dependencies
+- **CI Performance**: Optimized CI builds with no compilation required for indicators
 
 ## Features
 
@@ -44,178 +46,11 @@ All trades include automated stop losses based on ATR.
 
 - Python 3.8+
 - Interactive Brokers account with TWS or IB Gateway
-- TA-Lib (technical analysis library)
+- pandas-ta (technical analysis library)
 
 ## Installation
 
-### 1. Installing TA-Lib
-
-TA-Lib is a critical dependency for this system and requires a two-step installation: the C library must be installed first, followed by the Python wrapper.
-
-#### Platform-Specific One-Liners
-
-The simplest installation method depends on your operating system:
-
-**Conda (cross-platform):**
-```bash
-# The easiest cross-platform option if you use conda
-conda install -c conda-forge ta-lib
-```
-
-**Debian:**
-```bash
-# Debian has a native ta-lib-dev package
-sudo apt-get update && sudo apt-get install -y ta-lib-dev && pip install TA-Lib
-```
-
-**Ubuntu (22.04 or earlier):**
-```bash
-# libta-lib-dev is in the Universe repository, which needs to be enabled first
-sudo add-apt-repository universe && sudo apt-get update && sudo apt-get install -y libta-lib-dev && pip install TA-Lib
-```
-
-**Azure-based CI environments (including GitHub Actions):**
-```bash
-# Use Debian container for CI instead of Ubuntu for reliable TA-Lib installation
-# In GitHub Actions, use:
-container:
-  image: debian:bookworm-slim
-# Then install ta-lib-dev (without 'lib' prefix)
-apt-get update && apt-get install -y --no-install-recommends ta-lib-dev
-```
-
-**Ubuntu 24.04 and newer:** 
-Ubuntu 24.04 (Noble Numbat) doesn't include the `libta-lib-dev` package, so you'll need to build from source (use our bootstrap script below) or switch to Debian.
-
-**macOS:**
-```bash
-# Install with Homebrew and use dynamic prefix detection
-brew install ta-lib
-export LDFLAGS="-L$(brew --prefix ta-lib)/lib"
-export CPPFLAGS="-I$(brew --prefix ta-lib)/include"
-pip install --no-build-isolation TA-Lib
-```
-
-**Windows:**
-```bash
-# Install with correct Python version in wheel URL
-python -c "import sys; print(f'pip install https://github.com/TA-Lib/ta-lib-python/releases/download/TA_Lib-0.4.28/TA_Lib-0.4.28-cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}-win_amd64.whl')" | cmd
-```
-
-Or using conda:
-```bash
-conda install -c conda-forge ta-lib
-```
-
-#### Verifying Your Installation
-
-To verify TA-Lib is properly installed, we provide a quick verification script:
-
-```bash
-# Run the fail-fast verification script
-./scripts/verify_talib.sh
-
-# If it fails, you'll need to install TA-Lib
-if [ $? -ne 0 ]; then
-  echo "TA-Lib installation failed - run scripts/bootstrap_talib.sh and try again"
-  exit 1
-fi
-```
-
-You can also perform manual verification (works on all platforms):
-
-```bash
-# Basic verification
-python -c "import talib; print('TA-Lib installed successfully! Functions:', talib.get_functions()[:3])"
-
-# Complete verification (Linux/Mac)
-# 1. Confirm Universe is active and package is available (Ubuntu)
-apt-cache policy libta-lib-dev
-
-# 2. Verify the C Library exported the needed symbols
-nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
-
-# 3. Smoke-test the Python wrapper
-python - <<'EOF'
-import ctypes, talib
-ctypes.CDLL('libta-lib.so')
-print('Loaded:', talib.get_functions()[:5])
-EOF
-```
-
-If the first command returns a list of function names (like `['ADX', 'ADXR', 'APO']`), your installation is working correctly.
-
-#### Automated Installation: Bootstrap Script
-
-For a guided installation that handles your specific environment, we provide a bootstrap script:
-
-```bash
-# Clone the repository if you haven't already
-git clone https://github.com/yourusername/auto-vertical-spread-trader.git
-cd auto-vertical-spread-trader
-
-# Make the script executable
-chmod +x scripts/bootstrap_talib.sh
-
-# Run the bootstrap script
-./scripts/bootstrap_talib.sh
-```
-
-This script will:
-- Detect your operating system
-- Install necessary dependencies (using system packages when available)
-- Set up TA-Lib appropriately for your platform
-- Verify the installation works correctly
-
-#### Detailed Installation Instructions
-
-If you need more control over the installation process:
-
-##### Ubuntu/Debian
-```bash
-# Enable Universe repository where libta-lib-dev is located
-sudo add-apt-repository universe
-
-# For Azure-based CI systems (GitHub Actions), switch to official mirror
-if grep -q "azure.archive.ubuntu.com" /etc/apt/sources.list; then
-  sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
-fi
-
-# Install the C library and development headers
-sudo apt-get update
-sudo apt-get install -y libta-lib-dev
-
-# Install the Python wrapper
-pip install TA-Lib
-```
-
-##### macOS
-Using Homebrew:
-```bash
-# Install the C library
-brew install ta-lib
-
-# Install the Python wrapper
-pip install TA-Lib
-```
-
-##### Windows
-
-1. **Using pre-built wheels** (recommended):
-   - Download the appropriate wheel from [Christoph Gohlke's repository](https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib)
-   - Select the version matching your Python version and architecture (e.g., `TA_Lib-0.4.27-cp39-cp39-win_amd64.whl`)
-   - Install with pip:
-     ```
-     pip install TA_Lib-0.4.27-cp39-cp39-win_amd64.whl
-     ```
-
-2. **Building from source**:
-   - Download TA-Lib C library from [TA-Lib.org](https://ta-lib.org/hdr_dw.html)
-   - Unzip to `C:\ta-lib`
-   - Add to environment variables: `LIB` path should include `C:\ta-lib\lib`, and `INCLUDE` should include `C:\ta-lib\include`
-   - Install the Python wrapper: `pip install ta-lib`
-
-### 2. Installing the Package
+### Installing the Package
 
 1. Clone the repository:
    ```
@@ -230,10 +65,44 @@ pip install TA-Lib
    pip install -r requirements.txt
    ```
 
-3. Verify TA-Lib installation:
-   ```python
-   python -c "import talib; print('TA-Lib installed successfully!')"
+3. Verify pandas-ta installation:
    ```
+   python scripts/verify_pandas_ta.py
+   ```
+
+## Migration from TA-Lib to pandas-ta
+
+We've migrated from TA-Lib to pandas-ta for several key benefits:
+
+1. **Simplified Installation**: No C/C++ compilation required
+2. **DataFrame-Centric API**: More intuitive and pythonic usage
+3. **Cross-Platform Compatibility**: Works consistently across all operating systems
+4. **Extensive Indicator Library**: Over 130+ technical indicators available
+
+### Key API Differences
+
+TA-Lib and pandas-ta have different syntax patterns. Here's a comparison:
+
+**TA-Lib (old):**
+```python
+import talib
+df['ATR14'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+df['RSI14'] = talib.RSI(df['close'], timeperiod=14)
+```
+
+**pandas-ta (new):**
+```python
+import pandas_ta as ta
+df['ATR14'] = df.ta.atr(length=14)
+df['RSI14'] = df.ta.rsi(length=14)
+```
+
+### Verifying the Migration
+
+Run the verification script to ensure all indicators work correctly:
+```
+python scripts/verify_pandas_ta.py
+```
 
 ## Configuration
 
@@ -323,8 +192,8 @@ Common issues and solutions:
 
 - **Connection Errors**: Ensure TWS/Gateway is running and API connections are enabled (Configure > API > Settings)
 
-- **TA-Lib Installation Issues**: 
-  - If encountering import errors, first try our `scripts/bootstrap_talib.sh` script
+- **pandas-ta Installation Issues**: 
+  - If encountering import errors, first try our `scripts/bootstrap_pandas_ta.sh` script
   - For "undefined symbol" errors on Linux, use the system package: `sudo apt-get install libta-lib-dev` 
   - Library not found: Make sure to enable Universe repository with `sudo add-apt-repository universe`
   - Unable to locate package libta-lib-dev in Azure/GitHub Actions: Switch to official Ubuntu mirror with `sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list`
@@ -412,20 +281,14 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of changes to this project.
 ## Acknowledgments
 
 - [IB Insync](https://github.com/erdewit/ib_insync) for the Interactive Brokers API
-- [TA-Lib](https://github.com/mrjbq7/ta-lib) for technical analysis
+- [pandas-ta](https://github.com/twopirllc/pandas-ta) for technical analysis indicators
 
 ### Version Information
 
 This project uses:
 
-- **TA-Lib C library**: version 0.4.0 (most reliable and widely compatible version)
-- **Python wrapper**: 
-  - Linux/macOS: Use version matching your platform (built against C library 0.4.0)
-  - Windows: Pre-built wheels version 0.4.27 or 0.4.28 from Christoph Gohlke's repository
+- **pandas-ta**: version 0.3.0b0 or higher
+- **pandas**: version 1.3.0 or higher 
+- **numpy**: version 1.20.0 or higher
 
-For CI environments, we recommend pinning these exact versions to ensure reproducibility:
-- Ubuntu 22.04: `libta-lib-dev` from Universe repository
-- Ubuntu 24.04+: Source build from ta-lib-0.4.0
-- macOS: `brew install ta-lib`
-- Windows: Use appropriate wheel for your Python version from [Gohlke's repository](https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib)
-- Conda (all platforms): `conda install -c conda-forge ta-lib`
+For CI environments, we recommend pinning these exact versions to ensure reproducibility.

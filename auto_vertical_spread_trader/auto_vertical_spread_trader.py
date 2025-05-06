@@ -1,6 +1,6 @@
 from ib_insync import IB, Stock, Option, ComboLeg, Order, util
 import pandas as pd
-import talib
+import pandas_ta as ta
 import time
 from datetime import datetime
 import pytz
@@ -10,6 +10,8 @@ import csv
 from pathlib import Path
 from threading import Event
 import traceback
+import os
+import pickle
 
 # --- CONFIG ---
 CONFIG = {
@@ -155,13 +157,54 @@ def get_tech_df(symbol):
             return None
             
         df = util.df(bars)
-        df['MA50'] = df['close'].rolling(50).mean()
-        df['ATR14'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+        
+        # Use pandas-ta's strategy for bulk processing of indicators
+        df.ta.strategy(
+            name="VerticalSpreadStrategy",
+            ta=[
+                {"kind": "sma", "length": 50, "close": "close", "col_names": ("MA50",)},
+                {"kind": "atr", "length": 14, "col_names": ("ATR14",)}
+            ]
+        )
+        
         return df
         
     except Exception as e:
         logger.error(f"Error getting data for {symbol}: {e}")
         return None
+
+def get_tech_df_cached(symbol):
+    """
+    Get historical bars and calculate technical indicators with caching
+    """
+    # Create cache directory if it doesn't exist
+    cache_dir = Path("data_cache")
+    cache_dir.mkdir(exist_ok=True)
+    
+    cache_file = cache_dir / f"{symbol}_{CONFIG['LOOKBACK_DAYS']}.pkl"
+    cache_age = time.time() - cache_file.stat().st_mtime if cache_file.exists() else float('inf')
+    
+    # Use cache if it exists and is fresh (less than 1 day old)
+    if cache_file.exists() and cache_age < 86400:
+        try:
+            logger.debug(f"Loading cached data for {symbol}")
+            with open(cache_file, 'rb') as f:
+                return pickle.load(f)
+        except Exception as e:
+            logger.warning(f"Cache load failed for {symbol}: {e}")
+    
+    # Otherwise fetch fresh data
+    df = get_tech_df(symbol)
+    
+    # Cache the result if successful
+    if df is not None:
+        try:
+            with open(cache_file, 'wb') as f:
+                pickle.dump(df, f)
+        except Exception as e:
+            logger.warning(f"Cache save failed for {symbol}: {e}")
+    
+    return df
 
 
 # --- 3. Scan functions with volume filter ---
@@ -182,7 +225,7 @@ def scan_securities(symbols, scan_name, condition_func):
     
     for sym in symbols:
         try:
-            df = get_tech_df(sym)
+            df = get_tech_df_cached(sym)  # Use cached version
             if df is None or len(df) < 52:
                 continue
                 
@@ -224,36 +267,46 @@ def bear_rally_condition(df):
     return (two_bearish and ma_falling and price_at_ma), {}
 
 def high_base_condition(df):
-    """High base condition function"""
+    """High base condition function (vectorized)"""
     # Calculate additional indicators
     df['52w_high'] = df['close'].rolling(252).max()
     df['ATR_ratio'] = df['ATR14'] / df['ATR14'].rolling(20).mean()
     df['range_pct'] = (df['high'] - df['low']) / df['close'] * 100
     
-    today = df.iloc[-1]
+    if len(df) < 20:  # Need at least 20 days for moving averages
+        return False, {}
     
-    # High-base criteria
-    near_highs = today.close >= CONFIG['PRICE_NEAR_HIGH_PCT'] * today['52w_high']
-    low_volatility = today.ATR_ratio < CONFIG['HIGH_BASE_MAX_ATR_RATIO']
-    tight_range = today.range_pct < df.range_pct.rolling(20).mean().iloc[-1] * CONFIG['TIGHT_RANGE_FACTOR']
+    # Create boolean masks for each condition
+    near_highs = df['close'] >= CONFIG['PRICE_NEAR_HIGH_PCT'] * df['52w_high']
+    low_volatility = df['ATR_ratio'] < CONFIG['HIGH_BASE_MAX_ATR_RATIO']
+    tight_range = df['range_pct'] < df['range_pct'].rolling(20).mean() * CONFIG['TIGHT_RANGE_FACTOR']
     
-    return (near_highs and low_volatility and tight_range), {}
+    # Combine all conditions
+    condition_met = near_highs & low_volatility & tight_range
+    
+    # Return result for the last day
+    return bool(condition_met.iloc[-1]), {}
 
 def low_base_condition(df):
-    """Low base condition function"""
+    """Low base condition function (vectorized)"""
     # Calculate additional indicators
     df['52w_low'] = df['close'].rolling(252).min()
     df['ATR_ratio'] = df['ATR14'] / df['ATR14'].rolling(20).mean()
     df['range_pct'] = (df['high'] - df['low']) / df['close'] * 100
     
-    today = df.iloc[-1]
+    if len(df) < 20:  # Need at least 20 days for moving averages
+        return False, {}
     
-    # Low-base criteria
-    near_lows = today.close <= CONFIG['PRICE_NEAR_LOW_PCT'] * today['52w_low']
-    low_volatility = today.ATR_ratio < CONFIG['HIGH_BASE_MAX_ATR_RATIO']
-    tight_range = today.range_pct < df.range_pct.rolling(20).mean().iloc[-1] * CONFIG['TIGHT_RANGE_FACTOR']
+    # Create boolean masks for each condition
+    near_lows = df['close'] <= CONFIG['PRICE_NEAR_LOW_PCT'] * df['52w_low']
+    low_volatility = df['ATR_ratio'] < CONFIG['HIGH_BASE_MAX_ATR_RATIO']
+    tight_range = df['range_pct'] < df['range_pct'].rolling(20).mean() * CONFIG['TIGHT_RANGE_FACTOR']
     
-    return (near_lows and low_volatility and tight_range), {}
+    # Combine all conditions
+    condition_met = near_lows & low_volatility & tight_range
+    
+    # Return result for the last day
+    return bool(condition_met.iloc[-1]), {}
 
 def scan_bull_pullbacks(symbols):
     return scan_securities(symbols, "Bull Pullback", bull_pullback_condition)

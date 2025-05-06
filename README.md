@@ -81,7 +81,20 @@ pip install TA_Lib-0.4.27-cp39-cp39-win_amd64.whl
 
 #### Verifying Your Installation
 
-To check if TA-Lib is properly installed (works on all platforms):
+To verify TA-Lib is properly installed, we provide a quick verification script:
+
+```bash
+# Run the fail-fast verification script
+./scripts/verify_talib.sh
+
+# If it fails, you'll need to install TA-Lib
+if [ $? -ne 0 ]; then
+  echo "TA-Lib installation failed - run scripts/bootstrap_talib.sh and try again"
+  exit 1
+fi
+```
+
+You can also perform manual verification (works on all platforms):
 
 ```bash
 # Basic verification
@@ -372,3 +385,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of changes to this project.
 
 - [IB Insync](https://github.com/erdewit/ib_insync) for the Interactive Brokers API
 - [TA-Lib](https://github.com/mrjbq7/ta-lib) for technical analysis
+
+### Version Information
+
+This project uses TA-Lib version 0.4.0 for the C library, which is the most reliable and widely compatible version. The Python wrapper is configured to work with this version of the C library.

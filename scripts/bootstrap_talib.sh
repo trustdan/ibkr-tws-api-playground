@@ -39,13 +39,49 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
             
             # Verify C library exported symbols
             echo "Verifying exported symbols in libta-lib.so:"
-            if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
-                echo "TA_AVGDEV_Lookback symbol found in libta-lib.so"
-                echo "TA-Lib C library installed successfully from package!"
+            if [ -f "/usr/lib/libta-lib.so" ]; then
+                # Check the library with dash in the name (standard location)
+                if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
+                    echo "✓ TA_AVGDEV_Lookback symbol found in libta-lib.so"
+                    echo "TA-Lib C library installed successfully from package!"
+                else
+                    echo "Required symbols not found in installed package at /usr/lib/libta-lib.so"
+                    echo "Checking alternate filename (libta_lib.so)..."
+                    
+                    if [ -f "/usr/lib/libta_lib.so" ] && nm -D /usr/lib/libta_lib.so | grep -q "TA_AVGDEV_Lookback"; then
+                        echo "✓ TA_AVGDEV_Lookback symbol found in libta_lib.so"
+                        echo "Creating symlinks for consistency..."
+                        sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
+                        sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+                        sudo ldconfig
+                        echo "TA-Lib C library installed successfully from package!"
+                    else
+                        echo "Required symbols not found in installed package, falling back to source installation..."
+                        sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+                        INSTALL_FROM_SOURCE=1
+                    fi
+                fi
             else
-                echo "Required symbols not found in installed package, falling back to source installation..."
-                sudo apt-get install -y build-essential wget autoconf libtool pkg-config
-                INSTALL_FROM_SOURCE=1
+                echo "Library file not found at /usr/lib/libta-lib.so"
+                if [ -f "/usr/lib/libta_lib.so" ]; then
+                    echo "Found library at /usr/lib/libta_lib.so, creating symlinks..."
+                    sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
+                    sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+                    sudo ldconfig
+                    
+                    if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
+                        echo "✓ TA_AVGDEV_Lookback symbol found in libta-lib.so"
+                        echo "TA-Lib C library installed successfully from package!"
+                    else
+                        echo "Required symbols not found even after creating symlinks, falling back to source installation..."
+                        sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+                        INSTALL_FROM_SOURCE=1
+                    fi
+                else
+                    echo "No library files found, falling back to source installation..."
+                    sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+                    INSTALL_FROM_SOURCE=1
+                fi
             fi
         else
             echo "libta-lib-dev not found in repositories (common on Ubuntu 24.04+)"
@@ -144,10 +180,18 @@ if [ "$INSTALL_FROM_SOURCE" = "1" ]; then
                 sudo ln -sf $ACTUAL_LIB_PATH $LIB_DIR/libta-lib.so.0
             fi
             
-            # Verify C library exported symbols
+            # Run ldconfig again to update the symlinks
+            sudo ldconfig
+            
+            # Verify symlinks exist
+            echo "Verifying symlinks:"
+            ls -la $LIB_DIR/libta_lib.so*
+            ls -la $LIB_DIR/libta-lib.so*
+            
+            # Verify C library exported symbols (now using the dashed symlink)
             echo "Verifying exported symbols in libta-lib.so:"
             if nm -D $LIB_DIR/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
-                echo "TA_AVGDEV_Lookback symbol found in libta-lib.so"
+                echo "✓ TA_AVGDEV_Lookback symbol found in libta-lib.so"
             else
                 echo "Warning: Required symbols not found in compiled library!"
                 echo "Installation might not work correctly."

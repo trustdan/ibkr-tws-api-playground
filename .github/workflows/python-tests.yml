@@ -36,14 +36,35 @@ jobs:
         # Install the package
         sudo apt-get install -y libta-lib-dev
         
-        # Verify C library exported symbols
+        # Check which file was actually installed (underscore or dash)
+        echo "Checking installed library files:"
+        ls -la /usr/lib/libta*lib*
+        
+        # Create symlinks if needed (package might install as libta_lib.so)
+        if [ -f "/usr/lib/libta_lib.so" ] && [ ! -f "/usr/lib/libta-lib.so" ]; then
+          echo "Creating symlinks from libta_lib.so to libta-lib.so"
+          sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
+          sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+          sudo ldconfig
+        fi
+        
+        # Verify C library exported symbols (using the name expected by Python wrapper)
         echo "Verifying exported symbols in libta-lib.so:"
-        nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
+        if [ -f "/usr/lib/libta-lib.so" ]; then
+          nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
+          echo "✓ TA_AVGDEV_Lookback symbol is present in libta-lib.so"
+        elif [ -f "/usr/lib/libta_lib.so" ]; then
+          nm -D /usr/lib/libta_lib.so | grep TA_AVGDEV_Lookback
+          echo "✓ TA_AVGDEV_Lookback symbol is present in libta_lib.so"
+        else
+          echo "ERROR: Neither libta-lib.so nor libta_lib.so found!"
+          exit 1
+        fi
         
         # Verify the library is properly installed and registered
         echo "Checking TA-Lib library in system cache:"
-        ldconfig -p | grep libta-lib
-        ls -la /usr/lib/libta-lib*
+        ldconfig -p | grep libta
+        ls -la /usr/lib/libta*lib*
     
     - name: Install Python dependencies
       run: |
@@ -131,13 +152,19 @@ jobs:
         # Run ldconfig to update shared library cache
         sudo ldconfig
         
-        # Create symlinks for the Python wrapper
+        # Create symlinks with the correct naming expected by the Python wrapper
         sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
         sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+        sudo ldconfig
         
-        # Verify C library exported symbols
+        # Verify the symlinks are correctly created
+        ls -la /usr/lib/libta_lib.so*
+        ls -la /usr/lib/libta-lib.so*
+        
+        # Verify C library exported symbols (using the symlink name)
         echo "Verifying exported symbols in libta-lib.so:"
         nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
+        echo "✓ TA_AVGDEV_Lookback symbol is present"
     
     - name: Install Python dependencies and TA-Lib
       run: |
@@ -162,4 +189,75 @@ jobs:
         close = np.random.random(100)
         output = talib.SMA(close)
         print(f"SMA calculation successful: {output.shape}")
-        EOF 
+        EOF
+    
+    - name: Run verification script
+      run: |
+        chmod +x scripts/verify_talib.sh
+        ./scripts/verify_talib.sh
+
+  # Test on macOS using Homebrew
+  macos-build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install TA-Lib via Homebrew
+      run: |
+        brew install ta-lib
+        
+        # Verify the library is installed
+        ls -la /usr/local/lib/libta*
+    
+    - name: Install Python dependencies and TA-Lib
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install numpy
+        python -m pip install TA-Lib
+    
+    - name: Verify TA-Lib installation
+      run: |
+        python - << 'EOF'
+        import talib
+        print('TA-Lib functions sample:', talib.get_functions()[:5])
+        
+        # Test a simple function call
+        import numpy as np
+        close = np.random.random(100)
+        output = talib.SMA(close)
+        print(f"SMA calculation successful: {output.shape}")
+        EOF
+    
+    - name: Run verification script
+      run: |
+        chmod +x scripts/verify_talib.sh
+        ./scripts/verify_talib.sh
+
+  # Test on Windows using pre-built wheel
+  windows-build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install TA-Lib using pre-built wheel
+      run: |
+        # Determine Python version and platform for wheel URL
+        $pythonVersion = (python --version).Split()[1]
+        $majorMinor = $pythonVersion.Substring(0, 3).Replace(".", "")
+        
+        # Download and install appropriate wheel for Python 3.10 64-bit
+        Invoke-WebRequest -Uri "https://download.lfd.uci.edu/pythonlibs/archived/ta_lib-0.4.28-cp310-cp310-win_amd64.whl" -OutFile "talib.whl"
+        pip install numpy
+        pip install talib.whl
+    
+    - name: Verify TA-Lib installation
+      run: |
+        python -c "import talib; print('TA-Lib functions sample:', talib.get_functions()[:5]); import numpy as np; close = np.random.random(100); output = talib.SMA(close); print(f'SMA calculation successful: {output.shape}')" 

@@ -29,14 +29,35 @@ jobs:
         # Install the package
         sudo apt-get install -y libta-lib-dev
         
-        # Verify C library exported symbols
+        # Check which file was actually installed (underscore or dash)
+        echo "Checking installed library files:"
+        ls -la /usr/lib/libta*lib*
+        
+        # Create symlinks if needed (package might install as libta_lib.so)
+        if [ -f "/usr/lib/libta_lib.so" ] && [ ! -f "/usr/lib/libta-lib.so" ]; then
+          echo "Creating symlinks from libta_lib.so to libta-lib.so"
+          sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
+          sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+          sudo ldconfig
+        fi
+        
+        # Verify C library exported symbols (using the name expected by Python wrapper)
         echo "Verifying exported symbols in libta-lib.so:"
-        nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
+        if [ -f "/usr/lib/libta-lib.so" ]; then
+          nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
+          echo "✓ TA_AVGDEV_Lookback symbol is present in libta-lib.so"
+        elif [ -f "/usr/lib/libta_lib.so" ]; then
+          nm -D /usr/lib/libta_lib.so | grep TA_AVGDEV_Lookback
+          echo "✓ TA_AVGDEV_Lookback symbol is present in libta_lib.so"
+        else
+          echo "ERROR: Neither libta-lib.so nor libta_lib.so found!"
+          exit 1
+        fi
         
         # Verify the library is properly installed and registered
         echo "Checking TA-Lib library in system cache:"
-        ldconfig -p | grep libta-lib
-        ls -la /usr/lib/libta-lib*
+        ldconfig -p | grep libta
+        ls -la /usr/lib/libta*lib*
     
     - name: Install dependencies
       run: |

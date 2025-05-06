@@ -23,10 +23,22 @@ jobs:
     
     - name: Install TA-Lib system library
       run: |
-        # Enable Universe repository where libta-lib-dev is located
+        # Enable Universe repository and use official Ubuntu mirror
         sudo add-apt-repository universe
+        # Replace Azure mirror entries with main Ubuntu archive
+        sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
         sudo apt-get update
+        
+        # Verify Universe is active and libta-lib-dev is available
+        echo "Checking if libta-lib-dev is available in repositories:"
+        apt-cache policy libta-lib-dev
+        
+        # Install the package
         sudo apt-get install -y libta-lib-dev
+        
+        # Verify C library exported symbols
+        echo "Verifying exported symbols in libta-lib.so:"
+        nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
         
         # Verify the library is properly installed and registered
         echo "Checking TA-Lib library in system cache:"
@@ -89,4 +101,65 @@ jobs:
       uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml
-        fail_ci_if_error: false 
+        fail_ci_if_error: false
+
+  # Test source build fallback on newer Ubuntu
+  source-build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Build TA-Lib from source
+      run: |
+        # Install build dependencies
+        sudo apt-get update
+        sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+        
+        # Download and install TA-Lib from source
+        wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+        tar -xzf ta-lib-0.4.0-src.tar.gz
+        cd ta-lib/
+        ./configure --prefix=/usr
+        make
+        sudo make install
+        cd ..
+        
+        # Run ldconfig to update shared library cache
+        sudo ldconfig
+        
+        # Create symlinks for the Python wrapper
+        sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
+        sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+        
+        # Verify C library exported symbols
+        echo "Verifying exported symbols in libta-lib.so:"
+        nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
+    
+    - name: Install Python dependencies and TA-Lib
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install numpy
+        
+        # Install TA-Lib with explicit compiler flags
+        LDFLAGS="-L/usr/lib" CFLAGS="-I/usr/include" pip install --no-build-isolation TA-Lib
+    
+    - name: Verify TA-Lib installation
+      run: |
+        python - << 'EOF'
+        import ctypes, talib
+        # Ensure the C library loads
+        ctypes.CDLL('libta-lib.so')
+        # Ensure the wrapper finds its symbols
+        funcs = talib.get_functions()
+        print('TA-Lib functions sample:', funcs[:5])
+        
+        # Test a simple function call
+        import numpy as np
+        close = np.random.random(100)
+        output = talib.SMA(close)
+        print(f"SMA calculation successful: {output.shape}")
+        EOF 

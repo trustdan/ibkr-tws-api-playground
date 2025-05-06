@@ -19,6 +19,9 @@ runs-on: ubuntu-22.04
 # Enable the Universe repository where libta-lib-dev is located
 sudo add-apt-repository universe
 
+# Replace Azure mirror entries with main Ubuntu archive (GitHub Actions/Azure CI fix)
+sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+
 # Install the development package that includes headers and the shared library
 sudo apt-get update
 sudo apt-get install -y libta-lib-dev
@@ -30,6 +33,8 @@ pip install TA-Lib
 > **Note:** Ubuntu 24.04 (Noble Numbat) and newer versions do not include the `libta-lib-dev` package. For these environments, use the source installation method below.
 
 > **Important:** In Ubuntu, the `libta-lib-dev` package is in the Universe repository, which is not enabled by default in minimal CI environments. The `add-apt-repository universe` command is essential.
+
+> **Azure CI Environments:** GitHub Actions and other Azure-based CI use `azure.archive.ubuntu.com` as their mirror, which sometimes doesn't include `libta-lib-dev` even after enabling Universe. The `sed` command above switches to the official Ubuntu archive which is guaranteed to have the package.
 
 This approach ensures that:
 1. The C library and its headers are properly installed in standard system locations

@@ -16,10 +16,22 @@ jobs:
     
     - name: Install TA-Lib system library
       run: |
-        # Enable Universe repository where libta-lib-dev is located
+        # Enable Universe repository and use official Ubuntu mirror
         sudo add-apt-repository universe
+        # Replace Azure mirror entries with main Ubuntu archive
+        sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
         sudo apt-get update
+        
+        # Verify Universe is active and libta-lib-dev is available
+        echo "Checking if libta-lib-dev is available in repositories:"
+        apt-cache policy libta-lib-dev
+        
+        # Install the package
         sudo apt-get install -y libta-lib-dev
+        
+        # Verify C library exported symbols
+        echo "Verifying exported symbols in libta-lib.so:"
+        nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
         
         # Verify the library is properly installed and registered
         echo "Checking TA-Lib library in system cache:"
@@ -47,6 +59,12 @@ jobs:
         # Ensure the wrapper finds its symbols
         funcs = talib.get_functions()
         print('TA-Lib functions sample:', funcs[:5])
+        
+        # Test a simple function call
+        import numpy as np
+        close = np.random.random(100)
+        output = talib.SMA(close)
+        print(f"SMA calculation successful: {output.shape}")
         EOF
     
     - name: Build and publish

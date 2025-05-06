@@ -22,17 +22,28 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
             echo "add-apt-repository command not found, skipping Universe repository addition"
         fi
         
+        # Check if we're on an Azure VM or CI (common in GitHub Actions)
+        if grep -q "azure.archive.ubuntu.com" /etc/apt/sources.list; then
+            echo "Detected Azure mirror in sources.list, switching to official Ubuntu archive..."
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+        fi
+        
         # Check if libta-lib-dev is available in the repositories
         sudo apt-get update
-        if apt-cache search libta-lib-dev | grep -q libta-lib-dev; then
+        
+        # Verify Universe is active and libta-lib-dev is available
+        echo "Checking if libta-lib-dev is available in repositories:"
+        if apt-cache policy libta-lib-dev | grep -q "Candidate:"; then
             echo "libta-lib-dev found in repositories, installing..."
             sudo apt-get install -y libta-lib-dev
             
-            # Verify installation
-            if [ -f "/usr/lib/libta-lib.so" ] || [ -f "/usr/lib/libta-lib.so.0" ]; then
+            # Verify C library exported symbols
+            echo "Verifying exported symbols in libta-lib.so:"
+            if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
+                echo "TA_AVGDEV_Lookback symbol found in libta-lib.so"
                 echo "TA-Lib C library installed successfully from package!"
             else
-                echo "System package installation failed, falling back to source installation..."
+                echo "Required symbols not found in installed package, falling back to source installation..."
                 sudo apt-get install -y build-essential wget autoconf libtool pkg-config
                 INSTALL_FROM_SOURCE=1
             fi
@@ -132,6 +143,15 @@ if [ "$INSTALL_FROM_SOURCE" = "1" ]; then
                 echo "Creating symlink from $ACTUAL_LIB_PATH to $LIB_DIR/libta-lib.so.0"
                 sudo ln -sf $ACTUAL_LIB_PATH $LIB_DIR/libta-lib.so.0
             fi
+            
+            # Verify C library exported symbols
+            echo "Verifying exported symbols in libta-lib.so:"
+            if nm -D $LIB_DIR/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
+                echo "TA_AVGDEV_Lookback symbol found in libta-lib.so"
+            else
+                echo "Warning: Required symbols not found in compiled library!"
+                echo "Installation might not work correctly."
+            fi
         fi
     fi
 
@@ -176,7 +196,8 @@ try:
     print(f"C library loaded successfully")
     
     print(f"TA-Lib version: {talib.__version__}")
-    print(f"Available functions (sample): {talib.get_functions()[:5]}")
+    functions = talib.get_functions()
+    print(f"Available functions (sample): {functions[:5]}")
     print(f"ATR function available: {hasattr(talib, 'ATR')}")
     print(f"SMA function available: {hasattr(talib, 'SMA')}")
     
@@ -196,4 +217,15 @@ except Exception as e:
 EOF
 
 echo "TA-Lib bootstrap complete! ✓"
-echo "You can now import talib in your Python projects." 
+echo "You can now import talib in your Python projects."
+
+# Display installation summary
+if [ "$INSTALL_FROM_SOURCE" = "1" ]; then
+    echo "Installation method: Built from source"
+else
+    echo "Installation method: System package"
+fi
+echo "--------------------------------------"
+echo "Verification steps to run manually if needed:"
+echo "1. Check library symbols: nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback"
+echo "2. Test Python wrapper: python -c \"import talib; print(talib.get_functions()[:5])\"" 

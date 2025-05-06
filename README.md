@@ -44,10 +44,24 @@ TA-Lib is a critical dependency for this system and requires a two-step installa
 
 The simplest installation method depends on your operating system:
 
+**Conda (cross-platform):**
+```bash
+# The easiest cross-platform option if you use conda
+conda install -c conda-forge ta-lib
+```
+
 **Ubuntu/Debian (Ubuntu 22.04 or earlier):**
 ```bash
 # libta-lib-dev is in the Universe repository, which needs to be enabled first
 sudo add-apt-repository universe && sudo apt-get update && sudo apt-get install -y libta-lib-dev && pip install TA-Lib
+```
+
+**Azure-based CI environments (including GitHub Actions):**
+```bash
+# Azure mirrors may not include libta-lib-dev, switch to official Ubuntu archive
+sudo add-apt-repository universe
+sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+sudo apt-get update && sudo apt-get install -y libta-lib-dev && pip install TA-Lib
 ```
 
 **Ubuntu 24.04 and newer:** 
@@ -70,10 +84,25 @@ pip install TA_Lib-0.4.27-cp39-cp39-win_amd64.whl
 To check if TA-Lib is properly installed (works on all platforms):
 
 ```bash
+# Basic verification
 python -c "import talib; print('TA-Lib installed successfully! Functions:', talib.get_functions()[:3])"
+
+# Complete verification (Linux/Mac)
+# 1. Confirm Universe is active and package is available (Ubuntu)
+apt-cache policy libta-lib-dev
+
+# 2. Verify the C Library exported the needed symbols
+nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
+
+# 3. Smoke-test the Python wrapper
+python - <<'EOF'
+import ctypes, talib
+ctypes.CDLL('libta-lib.so')
+print('Loaded:', talib.get_functions()[:5])
+EOF
 ```
 
-If this returns a list of function names (like `['ADX', 'ADXR', 'APO']`), your installation is working correctly.
+If the first command returns a list of function names (like `['ADX', 'ADXR', 'APO']`), your installation is working correctly.
 
 #### Automated Installation: Bootstrap Script
 
@@ -105,6 +134,11 @@ If you need more control over the installation process:
 ```bash
 # Enable Universe repository where libta-lib-dev is located
 sudo add-apt-repository universe
+
+# For Azure-based CI systems (GitHub Actions), switch to official mirror
+if grep -q "azure.archive.ubuntu.com" /etc/apt/sources.list; then
+  sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+fi
 
 # Install the C library and development headers
 sudo apt-get update
@@ -252,6 +286,7 @@ Common issues and solutions:
   - If encountering import errors, first try our `scripts/bootstrap_talib.sh` script
   - For "undefined symbol" errors on Linux, use the system package: `sudo apt-get install libta-lib-dev` 
   - Library not found: Make sure to enable Universe repository with `sudo add-apt-repository universe`
+  - Unable to locate package libta-lib-dev in Azure/GitHub Actions: Switch to official Ubuntu mirror with `sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list`
   - Common error: `ImportError: libta_lib.so.0: cannot open shared object file`
     - Run `sudo ldconfig` after installation to update the shared library cache
     - For Ubuntu/Debian, use the system package which handles this automatically

@@ -1,13 +1,16 @@
 name: Publish to PyPI
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      LDFLAGS: "-L/usr/lib"
+      CFLAGS: "-I/usr/include"
+      LD_LIBRARY_PATH: "/usr/lib:${LD_LIBRARY_PATH}"
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python
@@ -18,7 +21,7 @@ jobs:
       run: |
         # Install build dependencies
         sudo apt-get update
-        sudo apt-get install -y build-essential autoconf libtool pkg-config
+        sudo apt-get install -y build-essential wget autoconf libtool pkg-config
 
         # Download and install TA-Lib from source
         wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
@@ -37,39 +40,52 @@ jobs:
         sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
         sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
         
+        # Verify symlinks are correct
+        ls -l /usr/lib/libta-lib.so
+        ls -l /usr/lib/libta-lib.so.0
+        
+        # Verify C library exports the required symbols
+        nm -D /usr/lib/libta_lib.so | grep TA_AVGDEV_Lookback
+        
+        # Verify direct C library loading works
+        python - <<EOF
+        import ctypes
+        ctypes.CDLL("libta-lib.so")
+        print("C library loaded successfully")
+        EOF
+        
         # Verify installation
         find /usr/lib -name "libta*"
-    - name: Install Python dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install build twine wheel setuptools
+        python -m pip install setuptools wheel twine build
         
-        # Install NumPy and Pandas (required for TA-Lib)
-        python -m pip install numpy pandas
+        # Install NumPy first (required for TA-Lib)
+        python -m pip install numpy
         
-        # Set library paths and install TA-Lib
+        # Set library paths and install TA-Lib with very explicit configuration
         export TA_LIBRARY_PATH=/usr/lib
         export TA_INCLUDE_PATH=/usr/include
         export LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
         
-        # Install TA-Lib Python wrapper
-        python -m pip install --no-build-isolation TA-Lib
+        # Verify C library is present and has correct symbols
+        nm -D /usr/lib/libta_lib.so | grep -E "TA_AVGDEV_Lookback|TA_ATR"
         
-        # Verify installation
-        python -c "import talib; print('TA-Lib installed successfully!')"
+        # Force rebuild against our installed version
+        LDFLAGS="-L/usr/lib" CFLAGS="-I/usr/include" pip install --no-build-isolation TA-Lib
+        
+        # Verify TA-Lib installation
+        python -c "import talib; print('TA-Lib version:', talib.__version__); print('Available functions:', talib.get_functions()[:5]); print('ATR function available:', hasattr(talib, 'ATR'))"
+        
+        # Install dependencies
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
     - name: Build and publish
       env:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
-        # Build both wheel and source distribution
         python -m build
-        
-        # List contents of dist directory
-        ls -la dist/
-        
-        # Check the distribution
-        twine check dist/*
-        
-        # Upload to PyPI
         twine upload dist/* 

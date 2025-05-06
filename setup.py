@@ -31,7 +31,7 @@ setup(
     install_requires=[
         "ib_insync>=0.9.70",
         "pandas>=1.3.0",
-        "numpy>=1.20.0",
+        "numpy>=1.20.0,<2.0.0",
         "pytz>=2021.1",
         "requests>=2.25.0",
         "lxml>=4.6.3",

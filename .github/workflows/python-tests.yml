@@ -42,7 +42,10 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install wheel setuptools pytest pytest-cov flake8 black mypy
         
-        # Explicitly install pandas-ta first
+        # Install numpy<2.0.0 first to fix pandas-ta compatibility
+        pip install "numpy>=1.20.0,<2.0.0" --no-cache-dir
+        
+        # Explicitly install pandas-ta
         pip install pandas-ta>=0.3.0b0 --no-cache-dir
         
         # Install other dependencies
@@ -104,7 +107,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         
-        # Explicitly install pandas-ta first
+        # Install numpy<2.0.0 first to fix pandas-ta compatibility
+        pip install "numpy>=1.20.0,<2.0.0" --no-cache-dir
+        
+        # Explicitly install pandas-ta
         pip install pandas-ta>=0.3.0b0 --no-cache-dir
         
         # Install test dependencies and package
@@ -148,7 +154,10 @@ jobs:
       run: |
         pip install pytest
         
-        # Explicitly install pandas-ta first
+        # Install numpy<2.0.0 first to fix pandas-ta compatibility
+        pip install "numpy>=1.20.0,<2.0.0" --no-cache-dir
+        
+        # Explicitly install pandas-ta
         pip install pandas-ta>=0.3.0b0 --no-cache-dir
         
         if (Test-Path -Path "requirements.txt") {

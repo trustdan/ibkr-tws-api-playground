@@ -14,7 +14,15 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     if command -v apt-get &> /dev/null; then
         echo "Detected Ubuntu/Debian-based system"
         
-        # First check if libta-lib-dev is available in the repositories
+        # First try to enable Universe repository if on Ubuntu (contains libta-lib-dev)
+        if command -v add-apt-repository &> /dev/null; then
+            echo "Enabling Universe repository..."
+            sudo add-apt-repository universe -y
+        else
+            echo "add-apt-repository command not found, skipping Universe repository addition"
+        fi
+        
+        # Check if libta-lib-dev is available in the repositories
         sudo apt-get update
         if apt-cache search libta-lib-dev | grep -q libta-lib-dev; then
             echo "libta-lib-dev found in repositories, installing..."

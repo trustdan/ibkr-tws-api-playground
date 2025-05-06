@@ -46,7 +46,8 @@ The simplest installation method depends on your operating system:
 
 **Ubuntu/Debian (Ubuntu 22.04 or earlier):**
 ```bash
-sudo apt-get update && sudo apt-get install -y libta-lib-dev && pip install TA-Lib
+# libta-lib-dev is in the Universe repository, which needs to be enabled first
+sudo add-apt-repository universe && sudo apt-get update && sudo apt-get install -y libta-lib-dev && pip install TA-Lib
 ```
 
 **Ubuntu 24.04 and newer:** 
@@ -102,6 +103,9 @@ If you need more control over the installation process:
 
 ##### Ubuntu/Debian
 ```bash
+# Enable Universe repository where libta-lib-dev is located
+sudo add-apt-repository universe
+
 # Install the C library and development headers
 sudo apt-get update
 sudo apt-get install -y libta-lib-dev
@@ -246,7 +250,8 @@ Common issues and solutions:
 
 - **TA-Lib Installation Issues**: 
   - If encountering import errors, first try our `scripts/bootstrap_talib.sh` script
-  - For "undefined symbol" errors on Linux, use the system package: `sudo apt-get install libta-lib-dev`
+  - For "undefined symbol" errors on Linux, use the system package: `sudo apt-get install libta-lib-dev` 
+  - Library not found: Make sure to enable Universe repository with `sudo add-apt-repository universe`
   - Common error: `ImportError: libta_lib.so.0: cannot open shared object file`
     - Run `sudo ldconfig` after installation to update the shared library cache
     - For Ubuntu/Debian, use the system package which handles this automatically

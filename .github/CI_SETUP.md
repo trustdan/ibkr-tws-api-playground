@@ -16,6 +16,9 @@ On Ubuntu 22.04-based CI runners (like GitHub Actions), we use the system packag
 # Specify Ubuntu 22.04 in your workflow
 runs-on: ubuntu-22.04
 
+# Enable the Universe repository where libta-lib-dev is located
+sudo add-apt-repository universe
+
 # Install the development package that includes headers and the shared library
 sudo apt-get update
 sudo apt-get install -y libta-lib-dev
@@ -25,6 +28,8 @@ pip install TA-Lib
 ```
 
 > **Note:** Ubuntu 24.04 (Noble Numbat) and newer versions do not include the `libta-lib-dev` package. For these environments, use the source installation method below.
+
+> **Important:** In Ubuntu, the `libta-lib-dev` package is in the Universe repository, which is not enabled by default in minimal CI environments. The `add-apt-repository universe` command is essential.
 
 This approach ensures that:
 1. The C library and its headers are properly installed in standard system locations

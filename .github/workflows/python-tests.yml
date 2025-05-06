@@ -23,6 +23,8 @@ jobs:
     
     - name: Install TA-Lib system library
       run: |
+        # Enable Universe repository where libta-lib-dev is located
+        sudo add-apt-repository universe
         sudo apt-get update
         sudo apt-get install -y libta-lib-dev
         

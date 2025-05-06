@@ -21,18 +21,18 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     
-    - name: Install TA-Lib system library
+    - name: Enable Universe & switch to official Ubuntu mirror
       run: |
-        # Enable Universe repository and use official Ubuntu mirror
-        sudo add-apt-repository universe
-        # Replace Azure mirror entries with main Ubuntu archive
+        sudo add-apt-repository -y universe
         sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
         sudo apt-get update
         
         # Verify Universe is active and libta-lib-dev is available
         echo "Checking if libta-lib-dev is available in repositories:"
         apt-cache policy libta-lib-dev
-        
+    
+    - name: Install TA-Lib system library
+      run: |
         # Install the package
         sudo apt-get install -y libta-lib-dev
         
@@ -84,12 +84,21 @@ jobs:
     - name: Verify TA-Lib installation
       run: |
         python - << 'EOF'
-        import ctypes, talib
-        # Ensure the C library loads
-        ctypes.CDLL('libta-lib.so')
-        # Ensure the wrapper finds its symbols
-        funcs = talib.get_functions()
-        print('TA-Lib functions sample:', funcs[:5])
+        import os, ctypes, talib
+        print("Platform:", os.uname().sysname)
+        for lib in ('libta-lib.so','libta_lib.so'):
+            try:
+                ctypes.CDLL(lib)
+                print(f"Loaded {lib}")
+                break
+            except OSError:
+                continue
+        else:
+            raise RuntimeError("Could not load any TA-Lib shared library")
+        # Verify symbol and wrapper
+        if 'AVGDEV' not in ''.join(talib.get_functions()):
+            raise RuntimeError("TA-AVGDEV symbol missing")
+        print("ta-lib wrapper OK:", talib.get_functions()[:3])
         
         # Test a simple function call
         import numpy as np
@@ -177,12 +186,21 @@ jobs:
     - name: Verify TA-Lib installation
       run: |
         python - << 'EOF'
-        import ctypes, talib
-        # Ensure the C library loads
-        ctypes.CDLL('libta-lib.so')
-        # Ensure the wrapper finds its symbols
-        funcs = talib.get_functions()
-        print('TA-Lib functions sample:', funcs[:5])
+        import os, ctypes, talib
+        print("Platform:", os.uname().sysname)
+        for lib in ('libta-lib.so','libta_lib.so'):
+            try:
+                ctypes.CDLL(lib)
+                print(f"Loaded {lib}")
+                break
+            except OSError:
+                continue
+        else:
+            raise RuntimeError("Could not load any TA-Lib shared library")
+        # Verify symbol and wrapper
+        if 'AVGDEV' not in ''.join(talib.get_functions()):
+            raise RuntimeError("TA-AVGDEV symbol missing")
+        print("ta-lib wrapper OK:", talib.get_functions()[:3])
         
         # Test a simple function call
         import numpy as np
@@ -209,9 +227,24 @@ jobs:
     - name: Install TA-Lib via Homebrew
       run: |
         brew install ta-lib
+        prefix=$(brew --prefix ta-lib)
+        echo "TA-Lib installed to $prefix"
+        
+        # Ensure Python's rpath can find it
+        export LDFLAGS="-L$prefix/lib ${LDFLAGS}"
+        export CPPFLAGS="-I$prefix/include ${CPPFLAGS}"
+        
+        # Optionally symlink so verification scripts can find it in /usr/local/lib
+        sudo mkdir -p /usr/local/lib
+        sudo ln -sf "$prefix/lib/libta_lib.dylib" /usr/local/lib/libta-lib.dylib
         
         # Verify the library is installed
+        ls -la $prefix/lib/libta*
         ls -la /usr/local/lib/libta*
+        
+        # Save environment variables for next steps
+        echo "LDFLAGS=-L$prefix/lib ${LDFLAGS}" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I$prefix/include ${CPPFLAGS}" >> $GITHUB_ENV
     
     - name: Install Python dependencies and TA-Lib
       run: |
@@ -222,8 +255,20 @@ jobs:
     - name: Verify TA-Lib installation
       run: |
         python - << 'EOF'
-        import talib
-        print('TA-Lib functions sample:', talib.get_functions()[:5])
+        import os, ctypes, talib
+        print("Platform:", os.uname().sysname)
+        for lib in ('libta-lib.dylib','libta_lib.dylib'):
+            try:
+                ctypes.CDLL(lib)
+                print(f"Loaded {lib}")
+                break
+            except OSError:
+                continue
+        else:
+            raise RuntimeError("Could not load any TA-Lib shared library")
+        # Verify wrapper
+        funcs = talib.get_functions()
+        print("ta-lib wrapper OK:", funcs[:3])
         
         # Test a simple function call
         import numpy as np
@@ -237,7 +282,7 @@ jobs:
         chmod +x scripts/verify_talib.sh
         ./scripts/verify_talib.sh
 
-  # Test on Windows using pre-built wheel
+  # Test on Windows using pre-built wheel or conda
   windows-build:
     runs-on: windows-latest
     steps:
@@ -247,17 +292,54 @@ jobs:
       with:
         python-version: '3.10'
     
-    - name: Install TA-Lib using pre-built wheel
+    # Primary approach: Use pre-built wheels
+    - name: Download & Install TA-Lib Wheel on Windows
+      shell: powershell
       run: |
-        # Determine Python version and platform for wheel URL
-        $pythonVersion = (python --version).Split()[1]
-        $majorMinor = $pythonVersion.Substring(0, 3).Replace(".", "")
+        $pyver = (python -c "import sys; print(''.join(map(str, sys.version_info[:2])))")
+        $arch = if ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64') {'win_amd64'} else {'win32'}
         
-        # Download and install appropriate wheel for Python 3.10 64-bit
-        Invoke-WebRequest -Uri "https://download.lfd.uci.edu/pythonlibs/archived/ta_lib-0.4.28-cp310-cp310-win_amd64.whl" -OutFile "talib.whl"
-        pip install numpy
-        pip install talib.whl
+        # Try two common wheel URLs/formats
+        $urls = @(
+          "https://download.lfd.uci.edu/pythonlibs/archived/TA_Lib-0.4.27-cp${pyver}-cp${pyver}-${arch}.whl",
+          "https://download.lfd.uci.edu/pythonlibs/archived/TA_Lib-0.4.28-cp${pyver}-cp${pyver}-${arch}.whl"
+        )
+        
+        foreach ($url in $urls) {
+          try {
+            Write-Host "Attempting download from $url"
+            Invoke-WebRequest -Uri $url -OutFile talib.whl
+            pip install numpy
+            pip install talib.whl
+            Write-Host "Successfully installed TA-Lib from wheel!"
+            exit 0
+          } catch {
+            Write-Host "Failed to download or install from $url"
+          }
+        }
+        
+        Write-Host "All wheel download attempts failed, will try conda fallback."
+        exit 1
+      continue-on-error: true
+    
+    # Fallback approach: Use conda if wheel installation fails
+    - name: Install via Conda (fallback)
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        auto-update-conda: true
+        python-version: '3.10'
+        activate-environment: ta_env
+        channels: conda-forge
+      if: ${{ failure() }}
+    
+    - name: Install TA-Lib via conda
+      shell: bash -l {0}
+      run: |
+        conda install -y -c conda-forge ta-lib numpy
+      if: ${{ failure() }}
     
     - name: Verify TA-Lib installation
+      shell: powershell
       run: |
+        pip install numpy
         python -c "import talib; print('TA-Lib functions sample:', talib.get_functions()[:5]); import numpy as np; close = np.random.random(100); output = talib.SMA(close); print(f'SMA calculation successful: {output.shape}')" 

@@ -388,4 +388,16 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of changes to this project.
 
 ### Version Information
 
-This project uses TA-Lib version 0.4.0 for the C library, which is the most reliable and widely compatible version. The Python wrapper is configured to work with this version of the C library.
+This project uses:
+
+- **TA-Lib C library**: version 0.4.0 (most reliable and widely compatible version)
+- **Python wrapper**: 
+  - Linux/macOS: Use version matching your platform (built against C library 0.4.0)
+  - Windows: Pre-built wheels version 0.4.27 or 0.4.28 from Christoph Gohlke's repository
+
+For CI environments, we recommend pinning these exact versions to ensure reproducibility:
+- Ubuntu 22.04: `libta-lib-dev` from Universe repository
+- Ubuntu 24.04+: Source build from ta-lib-0.4.0
+- macOS: `brew install ta-lib`
+- Windows: Use appropriate wheel for your Python version from [Gohlke's repository](https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib)
+- Conda (all platforms): `conda install -c conda-forge ta-lib`

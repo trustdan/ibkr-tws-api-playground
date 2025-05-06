@@ -14,18 +14,18 @@ jobs:
       with:
         python-version: '3.10'
     
-    - name: Install TA-Lib system library
+    - name: Enable Universe & switch to official Ubuntu mirror
       run: |
-        # Enable Universe repository and use official Ubuntu mirror
-        sudo add-apt-repository universe
-        # Replace Azure mirror entries with main Ubuntu archive
+        sudo add-apt-repository -y universe
         sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
         sudo apt-get update
         
         # Verify Universe is active and libta-lib-dev is available
         echo "Checking if libta-lib-dev is available in repositories:"
         apt-cache policy libta-lib-dev
-        
+    
+    - name: Install TA-Lib system library
+      run: |
         # Install the package
         sudo apt-get install -y libta-lib-dev
         
@@ -74,12 +74,21 @@ jobs:
     - name: Verify TA-Lib installation
       run: |
         python - << 'EOF'
-        import ctypes, talib
-        # Ensure the C library loads
-        ctypes.CDLL('libta-lib.so')
-        # Ensure the wrapper finds its symbols
-        funcs = talib.get_functions()
-        print('TA-Lib functions sample:', funcs[:5])
+        import os, ctypes, talib
+        print("Platform:", os.uname().sysname)
+        for lib in ('libta-lib.so','libta_lib.so'):
+            try:
+                ctypes.CDLL(lib)
+                print(f"Loaded {lib}")
+                break
+            except OSError:
+                continue
+        else:
+            raise RuntimeError("Could not load any TA-Lib shared library")
+        # Verify symbol and wrapper
+        if 'AVGDEV' not in ''.join(talib.get_functions()):
+            raise RuntimeError("TA-AVGDEV symbol missing")
+        print("ta-lib wrapper OK:", talib.get_functions()[:3])
         
         # Test a simple function call
         import numpy as np

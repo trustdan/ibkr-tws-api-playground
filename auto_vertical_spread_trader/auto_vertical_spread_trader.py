@@ -57,7 +57,7 @@ ib.connect("127.0.0.1", 7497, clientId=99)
 
 
 # --- 1. Define & filter universe ---
-def load_sp500_tickers():
+def load_sp500_tickers() -> List[str]:
     """
     Load S&P 500 tickers from a local file or download them.
     Returns a list of ticker symbols.
@@ -77,7 +77,7 @@ def load_sp500_tickers():
         url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
         tables = pd.read_html(url)
         df = tables[0]
-        tickers = df["Symbol"].str.replace(".", "-").tolist()
+        tickers: List[str] = df["Symbol"].str.replace(".", "-").tolist()
 
         # Save to file for future use
         with open(tickers_file, "w", newline="") as f:
@@ -90,13 +90,25 @@ def load_sp500_tickers():
         logger.error(f"Error downloading S&P 500 tickers: {e}")
         # Fallback to a minimal list if download fails
         logger.warning("Using fallback ticker list")
-        return ["AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "NVDA", "JPM", "V", "PG"]
+        fallback_tickers: List[str] = [
+            "AAPL",
+            "MSFT",
+            "AMZN",
+            "GOOGL",
+            "META",
+            "TSLA",
+            "NVDA",
+            "JPM",
+            "V",
+            "PG",
+        ]
+        return fallback_tickers
 
 
 universe = load_sp500_tickers()  # your list of S&P500 tickers
 
 
-def filter_universe(symbols):
+def filter_universe(symbols: List[str]) -> List[str]:
     """Filter universe to large cap, liquid, optionable stocks"""
     large = []
     logger.info(f"Filtering universe of {len(symbols)} symbols")
@@ -131,7 +143,7 @@ def filter_universe(symbols):
     return large
 
 
-large_caps = filter_universe(universe)
+large_caps: List[str] = filter_universe(universe)
 
 
 # --- 2. Fetch bars & indicators ---
@@ -650,7 +662,7 @@ class AutoVerticalSpreadTrader:
         self.spreadBook: Dict[str, Dict[str, Any]] = {}
         self.stop_monitor_thread = None
         self.exit_event = Event()
-        self.large_caps = []
+        self.large_caps: List[str] = []
         self.lastRunDate = None
         self.tz = pytz.timezone("US/Eastern")
 
@@ -689,12 +701,14 @@ class AutoVerticalSpreadTrader:
     def _load_universe(self) -> List[str]:
         """Load trading universe"""
         # For now, use the existing function
-        return load_sp500_tickers()
+        universe = load_sp500_tickers()
+        return universe
 
     def _filter_universe(self, symbols: List[str]) -> List[str]:
         """Filter universe to large cap, liquid stocks"""
         # For now, use the existing function
-        return filter_universe(symbols)
+        filtered = filter_universe(symbols)
+        return filtered
 
     def run_scan(self, scan_type: str) -> List[Tuple[str, Any, float]]:
         """
@@ -706,17 +720,20 @@ class AutoVerticalSpreadTrader:
         Returns:
             List of tuples with signal data: (symbol, bar, ATR)
         """
+        results: List[Tuple[str, Any, float]] = []
+
         if scan_type == "bull_pullbacks":
-            return scan_bull_pullbacks(self.large_caps)
+            results = scan_bull_pullbacks(self.large_caps)
         elif scan_type == "bear_rallies":
-            return scan_bear_rallies(self.large_caps)
+            results = scan_bear_rallies(self.large_caps)
         elif scan_type == "high_base":
-            return scan_high_base(self.large_caps)
+            results = scan_high_base(self.large_caps)
         elif scan_type == "low_base":
-            return scan_low_base(self.large_caps)
+            results = scan_low_base(self.large_caps)
         else:
             self.logger.error(f"Unknown scan type: {scan_type}")
-            return []
+
+        return results
 
     def _is_entry_time(self) -> bool:
         """

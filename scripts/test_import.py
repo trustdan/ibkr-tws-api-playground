@@ -3,9 +3,9 @@
 Simple script to test pandas_ta import
 """
 
-import sys
 import importlib.util
 import os
+import sys
 
 
 def print_module_location(module_name):

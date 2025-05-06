@@ -2,15 +2,16 @@
 Performance monitoring utilities for tracking trading metrics.
 """
 
-import os
 import csv
 import json
-import time
 import logging
+import os
+import time
 from datetime import datetime, timedelta
-import pandas as pd
-import matplotlib.pyplot as plt
 from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 

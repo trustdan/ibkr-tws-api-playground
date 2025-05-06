@@ -4,9 +4,10 @@ Handles option chain selection, strike filtering, and order placement.
 """
 
 import logging
-import traceback
 import time
-from ib_insync import Stock, Option, ComboLeg, Order
+import traceback
+
+from ib_insync import ComboLeg, Option, Order, Stock
 
 logger = logging.getLogger(__name__)
 

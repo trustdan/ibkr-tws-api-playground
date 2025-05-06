@@ -1,23 +1,24 @@
-from ib_insync import IB, Stock, Option, ComboLeg, Order, util
-import pandas as pd
-import pandas_ta as ta
-import time
-from datetime import datetime
-import pytz
-import threading
-import logging
 import csv
-from pathlib import Path
-from threading import Event
-import traceback
+import logging
 import os
 import pickle
-from typing import Dict, Any, List, Tuple, Optional, Union
+import threading
+import time
+import traceback
+from datetime import datetime
+from pathlib import Path
+from threading import Event
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import pandas as pd
+import pandas_ta as ta
+import pytz
+from ib_insync import IB, ComboLeg, Option, Order, Stock, util
 
 # Import scan functions from the scans module
 from auto_vertical_spread_trader.scans import (
-    scan_bull_pullbacks,
     scan_bear_rallies,
+    scan_bull_pullbacks,
     scan_high_base,
     scan_low_base,
 )
@@ -500,10 +501,10 @@ def run_entries_if_time():
             lastRunDate = now.date()
 
             # Run all scans
-            bulls = scan_bull_pullbacks(large_caps)
-            bears = scan_bear_rallies(large_caps)
-            high_bases = scan_high_base(large_caps)
-            low_bases = scan_low_base(large_caps)
+            bulls = scan_bull_pullbacks(ib, large_caps, CONFIG)
+            bears = scan_bear_rallies(ib, large_caps, CONFIG)
+            high_bases = scan_high_base(ib, large_caps, CONFIG)
+            low_bases = scan_low_base(ib, large_caps, CONFIG)
 
             # Place orders for each scan result
             for sym, bar, atr in bulls:
@@ -661,13 +662,13 @@ class AutoVerticalSpreadTrader:
         results: List[Tuple[str, Any, float]] = []
 
         if scan_type == "bull_pullbacks":
-            results = scan_bull_pullbacks(self.large_caps)
+            results = scan_bull_pullbacks(self.ib, self.large_caps, self.config)
         elif scan_type == "bear_rallies":
-            results = scan_bear_rallies(self.large_caps)
+            results = scan_bear_rallies(self.ib, self.large_caps, self.config)
         elif scan_type == "high_base":
-            results = scan_high_base(self.large_caps)
+            results = scan_high_base(self.ib, self.large_caps, self.config)
         elif scan_type == "low_base":
-            results = scan_low_base(self.large_caps)
+            results = scan_low_base(self.ib, self.large_caps, self.config)
         else:
             self.logger.error(f"Unknown scan type: {scan_type}")
 
@@ -693,10 +694,10 @@ class AutoVerticalSpreadTrader:
             self.lastRunDate = datetime.now(self.tz).date()
 
             # Run all scans
-            bulls = scan_bull_pullbacks(self.large_caps)
-            bears = scan_bear_rallies(self.large_caps)
-            high_bases = scan_high_base(self.large_caps)
-            low_bases = scan_low_base(self.large_caps)
+            bulls = scan_bull_pullbacks(self.ib, self.large_caps, self.config)
+            bears = scan_bear_rallies(self.ib, self.large_caps, self.config)
+            high_bases = scan_high_base(self.ib, self.large_caps, self.config)
+            low_bases = scan_low_base(self.ib, self.large_caps, self.config)
 
             # Place orders for each scan result
             for sym, bar, atr in bulls:

@@ -2,10 +2,11 @@
 # Test script specifically for MACD indicator
 # Used to debug the failing MACD test on macOS
 
+import platform
 import sys
+
 import numpy as np
 import pandas as pd
-import platform
 
 
 def test_macd():

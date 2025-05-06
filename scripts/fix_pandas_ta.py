@@ -9,9 +9,9 @@ Usage: python scripts/fix_pandas_ta.py
 """
 
 import os
-import sys
-import site
 import re
+import site
+import sys
 
 
 def find_pandas_ta_path():

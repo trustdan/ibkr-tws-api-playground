@@ -4,10 +4,11 @@ Handles S&P 500 ticker retrieval and filtering based on market cap, price, and o
 """
 
 import csv
-import time
 import logging
-import pandas as pd
+import time
 from pathlib import Path
+
+import pandas as pd
 from ib_insync import Stock
 
 logger = logging.getLogger(__name__)

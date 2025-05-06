@@ -3,16 +3,17 @@ Scan module for technical analysis conditions.
 Provides a unified framework for scanning stocks based on technical criteria.
 """
 
+import functools
 import logging
+import os
+import pickle
+import time
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+
 import pandas as pd
 import pandas_ta as ta
 from ib_insync import Stock, util
-import os
-import pickle
-from pathlib import Path
-import time
-from concurrent.futures import ProcessPoolExecutor
-import functools
 
 logger = logging.getLogger(__name__)
 

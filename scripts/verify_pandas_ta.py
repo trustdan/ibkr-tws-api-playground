@@ -9,6 +9,7 @@ Usage: python scripts/verify_pandas_ta.py
 """
 
 import sys
+
 import numpy as np
 import pandas as pd
 

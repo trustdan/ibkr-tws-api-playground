@@ -4,9 +4,8 @@ from pandas import DataFrame
 from pandas_ta.momentum import mom
 from pandas_ta.overlap import ema, sma
 from pandas_ta.trend import decreasing, increasing
+from pandas_ta.utils import get_offset, unsigned_differences, verify_series
 from pandas_ta.volatility import bbands, kc
-from pandas_ta.utils import get_offset
-from pandas_ta.utils import unsigned_differences, verify_series
 
 
 def squeeze_pro(

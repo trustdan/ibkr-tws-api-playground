@@ -20,12 +20,13 @@ Usage:
     df['ATR14'] = df.ta.atr(length=14)
 """
 
+import warnings
+from typing import List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
-from typing import Tuple, List, Optional, Union
 from numpy.typing import NDArray
-import warnings
 
 # Emit deprecation warning when module is imported
 warnings.warn(

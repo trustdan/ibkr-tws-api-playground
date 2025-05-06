@@ -3,11 +3,12 @@ Configure pytest test environment for the project.
 This file is loaded automatically by pytest at the start of testing.
 """
 
-import sys
 import os
-import pytest
-from unittest.mock import MagicMock
+import sys
 from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
 
 # Add the parent directory to sys.path (if needed)
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -30,12 +31,12 @@ class MockIB:
 
 # Create a system-wide mock for ib_insync
 sys.modules["ib_insync"] = MagicMock()
-sys.modules["ib_insync"].IB = MockIB
-sys.modules["ib_insync"].Stock = MagicMock()
-sys.modules["ib_insync"].Option = MagicMock()
-sys.modules["ib_insync"].ComboLeg = MagicMock()
-sys.modules["ib_insync"].Order = MagicMock()
-sys.modules["ib_insync"].util = MagicMock()
+sys.modules["ib_insync"].IB = MockIB  # type: ignore[attr-defined]
+sys.modules["ib_insync"].Stock = MagicMock()  # type: ignore[attr-defined]
+sys.modules["ib_insync"].Option = MagicMock()  # type: ignore[attr-defined]
+sys.modules["ib_insync"].ComboLeg = MagicMock()  # type: ignore[attr-defined]
+sys.modules["ib_insync"].Order = MagicMock()  # type: ignore[attr-defined]
+sys.modules["ib_insync"].util = MagicMock()  # type: ignore[attr-defined]
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -68,8 +69,8 @@ def sample_price_data():
     """
     Create sample price dataframe for testing
     """
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     # Create sample data with 60 days
     dates = pd.date_range(end=pd.Timestamp.today(), periods=60)

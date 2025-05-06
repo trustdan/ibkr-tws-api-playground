@@ -10,16 +10,17 @@ This script benchmarks the performance of different optimization strategies:
 Usage: python scripts/benchmark.py
 """
 
-import sys
-import os
-import time
-import pandas as pd
-import numpy as np
-import logging
 import concurrent.futures
-from pathlib import Path
+import logging
+import os
 import pickle
+import sys
+import time
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 # Configure minimal logging
 logging.basicConfig(level=logging.WARNING)

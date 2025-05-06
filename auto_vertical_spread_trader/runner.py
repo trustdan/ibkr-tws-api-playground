@@ -3,27 +3,28 @@ Main runner module for the auto vertical spread trader.
 Handles IB connection, trading schedule, and clean shutdown.
 """
 
-import logging
-import time
-import traceback
-import smtplib
-import datetime
-import pytz  # type: ignore[import]
-from email.mime.text import MIMEText
-from threading import Event
 import argparse
+import datetime
+import logging
 import os
 import shutil
+import smtplib
+import time
+import traceback
+from email.mime.text import MIMEText
 from pathlib import Path
+from threading import Event
 
+import pytz  # type: ignore[import]
 from ib_insync import IB, util
 
 util.patchAsyncio()  # To avoid asyncio conflicts
 
-from auto_vertical_spread_trader.config import CONFIG
-import universe
 import scans
+import universe
+
 import auto_vertical_spread_trader.executor as executor
+from auto_vertical_spread_trader.config import CONFIG
 from auto_vertical_spread_trader.monitor import StopLossMonitor
 
 # Configure logging

@@ -2,12 +2,13 @@
 Unit tests for the executor module
 """
 
-import unittest
-from unittest.mock import MagicMock, patch
-import pandas as pd
-import numpy as np
 import sys
+import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pandas as pd
 
 # Add the parent directory to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))

@@ -2,13 +2,14 @@
 Unit tests for the monitor module
 """
 
-import unittest
-from unittest.mock import MagicMock, patch
-import pandas as pd
-import numpy as np
 import sys
-from pathlib import Path
+import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pandas as pd
 
 # Add the parent directory to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))

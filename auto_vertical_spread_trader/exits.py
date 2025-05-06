@@ -4,6 +4,7 @@ Handles profit targets including Fibonacci extensions.
 """
 
 import logging
+
 import numpy as np
 
 logger = logging.getLogger(__name__)

@@ -2,19 +2,20 @@
 Unit tests for scan conditions
 """
 
-import unittest
-import pandas as pd
-import numpy as np
-from unittest.mock import MagicMock, patch
 import sys
+import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pandas as pd
 
 # Add the parent directory to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from auto_vertical_spread_trader.scans import (
-    bull_pullback_condition,
     bear_rally_condition,
+    bull_pullback_condition,
     high_base_condition,
     low_base_condition,
 )

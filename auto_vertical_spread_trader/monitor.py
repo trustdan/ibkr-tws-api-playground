@@ -4,10 +4,11 @@ Tracks open positions and closes them based on ATR-based stops or profit targets
 """
 
 import logging
-import time
 import threading
-from ib_insync import Stock, Order
+import time
+
 from executor import retry_api_call
+from ib_insync import Order, Stock
 
 logger = logging.getLogger(__name__)
 

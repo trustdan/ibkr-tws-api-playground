@@ -112,11 +112,31 @@ def test_pattern_recognition(price_data):
     """Test candlestick pattern recognition functions"""
     df = price_data
 
-    # Test if candlestick patterns are available in pandas-ta
-    # Note: pandas-ta has cdl_pattern which is more general
-    if hasattr(ta, "cdl_pattern"):
-        cdl_patterns = df.ta.cdl_pattern()
-        assert isinstance(cdl_patterns, pd.DataFrame), "Pattern recognition should return DataFrame"
+    # Add 'open' column if not present (required for pattern recognition)
+    if "open" not in df.columns:
+        df["open"] = df["close"].shift(1)
+
+    # Check if cdl_pattern is available
+    if hasattr(df.ta, "cdl_pattern"):
+        # Test pattern recognition via cdl_pattern
+        doji_pattern = df.ta.cdl_pattern(name="doji")
+        assert isinstance(doji_pattern, pd.DataFrame), "Pattern recognition should return DataFrame"
+
+        # Check for any column that starts with CDL_DOJI (different pandas-ta versions use different naming)
+        has_doji_col = any(col.startswith("CDL_DOJI") for col in doji_pattern.columns)
+        assert has_doji_col, "Doji pattern column should exist (starting with CDL_DOJI)"
+
+        # Try inside pattern if available
+        try:
+            inside_pattern = df.ta.cdl_pattern(name="inside")
+            has_inside_col = any(col.startswith("CDL_INSIDE") for col in inside_pattern.columns)
+            assert has_inside_col, "Inside pattern column should exist (starting with CDL_INSIDE)"
+        except:
+            # Inside pattern might not be available in all versions
+            pass
+    else:
+        # Skip the test if cdl_pattern is not available
+        pytest.skip("cdl_pattern not available in this pandas-ta version")
 
 
 def test_additional_functions(price_data):

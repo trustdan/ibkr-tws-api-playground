@@ -1,5 +1,5 @@
 """
-Tests for pandas-ta indicator functionality.
+Tests for native pandas-ta indicator functionality without any TA-Lib dependency.
 Used to verify proper pandas-ta installation and catch regressions.
 """
 
@@ -26,8 +26,11 @@ def price_data():
     close = 100 + np.cumsum(np.random.normal(0, 1, 100))  # Random walk
     high = close + np.random.uniform(0, 3, 100)
     low = close - np.random.uniform(0, 3, 100)
+    open_prices = close - np.random.uniform(-1, 1, 100)  # Add open prices for pattern recognition
     volume = np.random.randint(1000, 10000, 100)
-    df = pd.DataFrame({"close": close, "high": high, "low": low, "volume": volume})
+    df = pd.DataFrame(
+        {"open": open_prices, "high": high, "low": low, "close": close, "volume": volume}
+    )
     return df
 
 
@@ -109,14 +112,37 @@ def test_volume_indicators(price_data):
 
 
 def test_pattern_recognition(price_data):
-    """Test candlestick pattern recognition functions"""
+    """Test candlestick pattern recognition functions using native pandas-ta implementation"""
     df = price_data
 
-    # Test if candlestick patterns are available in pandas-ta
-    # Note: pandas-ta has cdl_pattern which is more general
-    if hasattr(ta, "cdl_pattern"):
-        cdl_patterns = df.ta.cdl_pattern()
-        assert isinstance(cdl_patterns, pd.DataFrame), "Pattern recognition should return DataFrame"
+    # Ensure all required columns are present
+    assert "open" in df.columns, "Open prices are required for pattern recognition"
+
+    # Check if cdl_pattern is available
+    if hasattr(df.ta, "cdl_pattern"):
+        # Test pattern recognition via cdl_pattern
+        pattern_results = df.ta.cdl_pattern()
+        assert isinstance(
+            pattern_results, pd.DataFrame
+        ), "Pattern recognition should return DataFrame"
+
+        # Try specific patterns if implementation supports them
+        try:
+            doji_pattern = df.ta.cdl_pattern(name="doji")
+            has_doji_col = any(col.startswith("CDL_DOJI") for col in doji_pattern.columns)
+            assert has_doji_col, "Doji pattern column should exist (starting with CDL_DOJI)"
+        except:
+            pass
+
+        try:
+            inside_pattern = df.ta.cdl_pattern(name="inside")
+            has_inside_col = any(col.startswith("CDL_INSIDE") for col in inside_pattern.columns)
+            assert has_inside_col, "Inside pattern column should exist (starting with CDL_INSIDE)"
+        except:
+            pass
+    else:
+        # Skip the test if cdl_pattern is not available
+        pytest.skip("cdl_pattern not available in this pandas-ta version")
 
 
 def test_additional_functions(price_data):

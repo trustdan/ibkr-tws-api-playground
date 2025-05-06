@@ -52,4 +52,4 @@ setup(
             "auto-trader=auto_vertical_spread_trader.runner:main",
         ],
     },
-) 
+)

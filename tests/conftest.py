@@ -7,6 +7,7 @@ import sys
 import os
 import pytest
 
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_testing_environment():
     """
@@ -14,17 +15,18 @@ def setup_testing_environment():
     This fixture runs automatically for all tests.
     """
     print("Setting up testing environment...")
-    
+
     # Try to import pandas-ta
     try:
         import pandas_ta as ta
+
         print(f"pandas-ta is available. Categories: {list(ta.Category.keys())}")
     except ImportError:
         print("Warning: pandas-ta not available, some tests may fail")
         print("Install with: pip install pandas-ta>=0.3.0b0")
-    
+
     # Set CI environment variable
-    os.environ['CI'] = 'true'
-    
+    os.environ["CI"] = "true"
+
     # Add any other test environment setup here
-    print("Test environment setup complete") 
+    print("Test environment setup complete")

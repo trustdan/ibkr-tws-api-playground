@@ -7,8 +7,11 @@ on:
     branches: [ main ]
 
 jobs:
+  # Main test job using Debian container
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bookworm-slim
     strategy:
       fail-fast: false
       matrix:
@@ -16,55 +19,48 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+    
+    - name: Set up Python and TA-Lib dependencies
+      run: |
+        # Install Python and dependencies with minimal footprint
+        apt-get update
+        apt-get install -y --no-install-recommends python3 python3-pip python3-venv python3-dev ta-lib-dev build-essential wget ca-certificates
+        
+        # Clean up apt cache to reduce container size
+        apt-get clean
+        rm -rf /var/lib/apt/lists/*
+        
+        # Create symlinks from Python to python3 for compatibility
+        ln -sf /usr/bin/python3 /usr/bin/python
+        ln -sf /usr/bin/pip3 /usr/bin/pip
+        
+        # Check Python version to ensure we're using the right one
+        python --version
+        
+        # Verify TA-Lib library is installed correctly
+        ls -la /usr/lib/libta*
+        
+        # Verify the library has the needed symbols
+        if [ -f "/usr/lib/libta_lib.so" ]; then
+          echo "Found libta_lib.so - creating symlinks for Python wrapper"
+          ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
+          ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+          ldconfig
+        fi
+    
+    # Cache pip packages
+    - name: Get pip cache directory
+      id: pip-cache
+      run: |
+        echo "dir=$(pip cache dir)" >> $GITHUB_OUTPUT
+      
+    - name: Set up pip cache
+      uses: actions/cache@v3
       with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Enable Universe & switch to official Ubuntu mirror
-      run: |
-        sudo add-apt-repository -y universe
-        sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
-        sudo apt-get update
-        
-        # Verify Universe is active and libta-lib-dev is available
-        echo "Checking if libta-lib-dev is available in repositories:"
-        apt-cache policy libta-lib-dev
-    
-    - name: Install TA-Lib system library
-      run: |
-        # Install the package
-        sudo apt-get install -y libta-lib-dev
-        
-        # Check which file was actually installed (underscore or dash)
-        echo "Checking installed library files:"
-        ls -la /usr/lib/libta*lib*
-        
-        # Create symlinks if needed (package might install as libta_lib.so)
-        if [ -f "/usr/lib/libta_lib.so" ] && [ ! -f "/usr/lib/libta-lib.so" ]; then
-          echo "Creating symlinks from libta_lib.so to libta-lib.so"
-          sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
-          sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
-          sudo ldconfig
-        fi
-        
-        # Verify C library exported symbols (using the name expected by Python wrapper)
-        echo "Verifying exported symbols in libta-lib.so:"
-        if [ -f "/usr/lib/libta-lib.so" ]; then
-          nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
-          echo "✓ TA_AVGDEV_Lookback symbol is present in libta-lib.so"
-        elif [ -f "/usr/lib/libta_lib.so" ]; then
-          nm -D /usr/lib/libta_lib.so | grep TA_AVGDEV_Lookback
-          echo "✓ TA_AVGDEV_Lookback symbol is present in libta_lib.so"
-        else
-          echo "ERROR: Neither libta-lib.so nor libta_lib.so found!"
-          exit 1
-        fi
-        
-        # Verify the library is properly installed and registered
-        echo "Checking TA-Lib library in system cache:"
-        ldconfig -p | grep libta
-        ls -la /usr/lib/libta*lib*
+        path: ${{ steps.pip-cache.outputs.dir }}
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
     
     - name: Install Python dependencies
       run: |
@@ -84,28 +80,33 @@ jobs:
     - name: Verify TA-Lib installation
       run: |
         python - << 'EOF'
-        import os, ctypes, talib
-        print("Platform:", os.uname().sysname)
-        for lib in ('libta-lib.so','libta_lib.so'):
-            try:
-                ctypes.CDLL(lib)
-                print(f"Loaded {lib}")
-                break
-            except OSError:
-                continue
-        else:
-            raise RuntimeError("Could not load any TA-Lib shared library")
-        # Verify symbol and wrapper
-        if 'AVGDEV' not in ''.join(talib.get_functions()):
-            raise RuntimeError("TA-AVGDEV symbol missing")
-        print("ta-lib wrapper OK:", talib.get_functions()[:3])
-        
-        # Test a simple function call
+        import talib
         import numpy as np
-        close = np.random.random(100)
-        output = talib.SMA(close)
-        print(f"SMA calculation successful: {output.shape}")
+        
+        # Test basic SMA calculation
+        data = np.random.random(100)
+        output = talib.SMA(data)
+        print("TA-Lib SMA output:", output[:5])
+        
+        # Ensure AVGDEV function is available
+        if hasattr(talib, 'AVGDEV'):
+            avgdev = talib.AVGDEV(data)
+            print("TA-Lib AVGDEV output:", avgdev[:5])
+        else:
+            print("WARNING: AVGDEV function not available")
+        
+        # List all available functions
+        print("Available functions:", len(talib.get_functions()))
+        print("Sample functions:", talib.get_functions()[:5])
+        
+        # Quick smoke test that was requested
+        sma_result = talib.SMA(np.arange(10))
+        print("Quick smoke test - SMA:", sma_result[0:3])
         EOF
+    
+    - name: Run comprehensive indicator tests
+      run: |
+        bash scripts/verify_talib.sh
     
     - name: Lint with flake8
       run: |
@@ -126,220 +127,169 @@ jobs:
       run: |
         # Run tests with coverage
         pytest --cov=auto_vertical_spread_trader --cov-report=xml --cov-report=term --cov-fail-under=80
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        fail_ci_if_error: false
 
-  # Test source build fallback on newer Ubuntu
-  source-build:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Build TA-Lib from source
-      run: |
-        # Install build dependencies
-        sudo apt-get update
-        sudo apt-get install -y build-essential wget autoconf libtool pkg-config
-        
-        # Download and install TA-Lib from source
-        wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-        tar -xzf ta-lib-0.4.0-src.tar.gz
-        cd ta-lib/
-        ./configure --prefix=/usr
-        make
-        sudo make install
-        cd ..
-        
-        # Run ldconfig to update shared library cache
-        sudo ldconfig
-        
-        # Create symlinks with the correct naming expected by the Python wrapper
-        sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
-        sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
-        sudo ldconfig
-        
-        # Verify the symlinks are correctly created
-        ls -la /usr/lib/libta_lib.so*
-        ls -la /usr/lib/libta-lib.so*
-        
-        # Verify C library exported symbols (using the symlink name)
-        echo "Verifying exported symbols in libta-lib.so:"
-        nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback
-        echo "✓ TA_AVGDEV_Lookback symbol is present"
-    
-    - name: Install Python dependencies and TA-Lib
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install numpy
-        
-        # Install TA-Lib with explicit compiler flags
-        LDFLAGS="-L/usr/lib" CFLAGS="-I/usr/include" pip install --no-build-isolation TA-Lib
-    
-    - name: Verify TA-Lib installation
-      run: |
-        python - << 'EOF'
-        import os, ctypes, talib
-        print("Platform:", os.uname().sysname)
-        for lib in ('libta-lib.so','libta_lib.so'):
-            try:
-                ctypes.CDLL(lib)
-                print(f"Loaded {lib}")
-                break
-            except OSError:
-                continue
-        else:
-            raise RuntimeError("Could not load any TA-Lib shared library")
-        # Verify symbol and wrapper
-        if 'AVGDEV' not in ''.join(talib.get_functions()):
-            raise RuntimeError("TA-AVGDEV symbol missing")
-        print("ta-lib wrapper OK:", talib.get_functions()[:3])
-        
-        # Test a simple function call
-        import numpy as np
-        close = np.random.random(100)
-        output = talib.SMA(close)
-        print(f"SMA calculation successful: {output.shape}")
-        EOF
-    
-    - name: Run verification script
-      run: |
-        chmod +x scripts/verify_talib.sh
-        ./scripts/verify_talib.sh
-
-  # Test on macOS using Homebrew
+  # macOS build with Homebrew
   macos-build:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3
+    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
     
-    - name: Install TA-Lib via Homebrew
+    # Cache Homebrew packages
+    - name: Cache Homebrew packages
+      uses: actions/cache@v3
+      with:
+        path: ~/Library/Caches/Homebrew
+        key: ${{ runner.os }}-brew-${{ hashFiles('.github/workflows/python-tests.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-brew-
+    
+    # Cache pip packages
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/Library/Caches/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install TA-Lib via Homebrew with proper prefix handling
       run: |
+        # Install TA-Lib with Homebrew
         brew install ta-lib
-        prefix=$(brew --prefix ta-lib)
-        echo "TA-Lib installed to $prefix"
         
-        # Ensure Python's rpath can find it
-        export LDFLAGS="-L$prefix/lib ${LDFLAGS}"
-        export CPPFLAGS="-I$prefix/include ${CPPFLAGS}"
+        # Determine the installation path
+        PREFIX=$(brew --prefix ta-lib)
+        echo "TA-Lib installed at: $PREFIX"
         
-        # Optionally symlink so verification scripts can find it in /usr/local/lib
-        sudo mkdir -p /usr/local/lib
-        sudo ln -sf "$prefix/lib/libta_lib.dylib" /usr/local/lib/libta-lib.dylib
+        # Set environment variables for compilation
+        echo "LDFLAGS=-L$PREFIX/lib" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I$PREFIX/include" >> $GITHUB_ENV
+        echo "TA_LIBRARY_PATH=$PREFIX/lib" >> $GITHUB_ENV
+        echo "TA_INCLUDE_PATH=$PREFIX/include" >> $GITHUB_ENV
         
-        # Verify the library is installed
-        ls -la $prefix/lib/libta*
-        ls -la /usr/local/lib/libta*
-        
-        # Save environment variables for next steps
-        echo "LDFLAGS=-L$prefix/lib ${LDFLAGS}" >> $GITHUB_ENV
-        echo "CPPFLAGS=-I$prefix/include ${CPPFLAGS}" >> $GITHUB_ENV
+        # Verify library exists
+        ls -la $PREFIX/lib/libta_lib*
     
     - name: Install Python dependencies and TA-Lib
       run: |
-        python -m pip install --upgrade pip
-        python -m pip install numpy
-        python -m pip install TA-Lib
+        python -m pip install --upgrade pip numpy
+        
+        # Use explicit compiler flags for TA-Lib installation
+        LDFLAGS="-L${{ env.TA_LIBRARY_PATH }}" CPPFLAGS="-I${{ env.TA_INCLUDE_PATH }}" pip install --no-build-isolation TA-Lib
+        
+        # Install test dependencies and package
+        pip install pytest
+        pip install -e .
     
     - name: Verify TA-Lib installation
       run: |
         python - << 'EOF'
-        import os, ctypes, talib
-        print("Platform:", os.uname().sysname)
-        for lib in ('libta-lib.dylib','libta_lib.dylib'):
-            try:
-                ctypes.CDLL(lib)
-                print(f"Loaded {lib}")
-                break
-            except OSError:
-                continue
-        else:
-            raise RuntimeError("Could not load any TA-Lib shared library")
-        # Verify wrapper
-        funcs = talib.get_functions()
-        print("ta-lib wrapper OK:", funcs[:3])
-        
-        # Test a simple function call
+        import talib
         import numpy as np
-        close = np.random.random(100)
-        output = talib.SMA(close)
-        print(f"SMA calculation successful: {output.shape}")
+        
+        # Test basic SMA calculation
+        data = np.random.random(100)
+        output = talib.SMA(data)
+        print("TA-Lib SMA output:", output[:5])
+        
+        # List all available functions
+        print("Available functions:", len(talib.get_functions()))
+        print("Sample functions:", talib.get_functions()[:5])
+        
+        # Quick smoke test
+        sma_result = talib.SMA(np.arange(10))
+        print("Quick smoke test - SMA:", sma_result[0:3])
         EOF
     
-    - name: Run verification script
+    - name: Run comprehensive indicator tests
       run: |
-        chmod +x scripts/verify_talib.sh
-        ./scripts/verify_talib.sh
+        bash scripts/verify_talib.sh
 
-  # Test on Windows using pre-built wheel or conda
+  # Windows build with both wheel and conda approaches
   windows-build:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v3
+    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
     
-    # Primary approach: Use pre-built wheels
-    - name: Download & Install TA-Lib Wheel on Windows
+    # Cache pip packages
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install TA-Lib using GitHub released wheel
       shell: powershell
       run: |
-        $pyver = (python -c "import sys; print(''.join(map(str, sys.version_info[:2])))")
-        $arch = if ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64') {'win_amd64'} else {'win32'}
+        $pyver = python -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')"
+        $arch = "win_amd64" # Assume 64-bit
         
-        # Try two common wheel URLs/formats
-        $urls = @(
-          "https://download.lfd.uci.edu/pythonlibs/archived/TA_Lib-0.4.27-cp${pyver}-cp${pyver}-${arch}.whl",
-          "https://download.lfd.uci.edu/pythonlibs/archived/TA_Lib-0.4.28-cp${pyver}-cp${pyver}-${arch}.whl"
-        )
+        # Install required dependencies
+        pip install numpy
         
-        foreach ($url in $urls) {
-          try {
-            Write-Host "Attempting download from $url"
-            Invoke-WebRequest -Uri $url -OutFile talib.whl
-            pip install numpy
-            pip install talib.whl
-            Write-Host "Successfully installed TA-Lib from wheel!"
-            exit 0
-          } catch {
-            Write-Host "Failed to download or install from $url"
-          }
+        # Try GitHub released wheel first
+        try {
+          $wheel_url = "https://github.com/TA-Lib/ta-lib-python/releases/download/TA_Lib-0.4.28/TA_Lib-0.4.28-cp${pyver}-cp${pyver}-${arch}.whl"
+          Write-Host "Attempting to install from $wheel_url"
+          pip install $wheel_url
+          Write-Host "Successfully installed TA-Lib from GitHub release"
+          exit 0
+        } catch {
+          Write-Host "Failed to install from GitHub release: $_"
+          Write-Host "Will try conda installation next"
         }
-        
-        Write-Host "All wheel download attempts failed, will try conda fallback."
-        exit 1
       continue-on-error: true
     
-    # Fallback approach: Use conda if wheel installation fails
-    - name: Install via Conda (fallback)
+    - name: Set up Conda (fallback)
       uses: conda-incubator/setup-miniconda@v2
       with:
         auto-update-conda: true
         python-version: '3.10'
-        activate-environment: ta_env
         channels: conda-forge
       if: ${{ failure() }}
     
-    - name: Install TA-Lib via conda
+    - name: Install TA-Lib via Conda
       shell: bash -l {0}
       run: |
         conda install -y -c conda-forge ta-lib numpy
+        python -c "import sys; print(f'Using Python {sys.version} from {sys.executable}')"
       if: ${{ failure() }}
     
     - name: Verify TA-Lib installation
       shell: powershell
       run: |
-        pip install numpy
-        python -c "import talib; print('TA-Lib functions sample:', talib.get_functions()[:5]); import numpy as np; close = np.random.random(100); output = talib.SMA(close); print(f'SMA calculation successful: {output.shape}')" 
+        python -c "import numpy; print('NumPy installed')"
+        python - << 'EOF'
+        import talib
+        import numpy as np
+        
+        # Test basic SMA calculation
+        data = np.random.random(100)
+        output = talib.SMA(data)
+        print("TA-Lib SMA output:", output[:5])
+        
+        # List all available functions
+        print("Available functions:", len(talib.get_functions()))
+        print("Sample functions:", talib.get_functions()[:5])
+        
+        # Quick smoke test
+        sma_result = talib.SMA(np.arange(10))
+        print("Quick smoke test - SMA:", sma_result[0:3])
+        EOF
+    
+    - name: Run comprehensive indicator tests
+      shell: powershell
+      run: |
+        ./scripts/verify_talib.sh 

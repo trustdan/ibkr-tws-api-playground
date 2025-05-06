@@ -11,83 +11,139 @@ echo "======================="
 # Check OS type and install dependencies
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     echo "Detected Linux system"
-    if command -v apt-get &> /dev/null; then
-        echo "Detected Ubuntu/Debian-based system"
-        
-        # First try to enable Universe repository if on Ubuntu (contains libta-lib-dev)
-        if command -v add-apt-repository &> /dev/null; then
-            echo "Enabling Universe repository..."
-            sudo add-apt-repository universe -y
+    
+    # Check for Debian vs Ubuntu
+    if [ -f "/etc/debian_version" ]; then
+        DEBIAN_VERSION=$(cat /etc/debian_version)
+        if grep -q "Ubuntu" /etc/issue 2>/dev/null; then
+            echo "Detected Ubuntu-based system"
+            DISTRO="ubuntu"
         else
-            echo "add-apt-repository command not found, skipping Universe repository addition"
+            echo "Detected Debian-based system (version: $DEBIAN_VERSION)"
+            DISTRO="debian"
         fi
         
-        # Check if we're on an Azure VM or CI (common in GitHub Actions)
-        if grep -q "azure.archive.ubuntu.com" /etc/apt/sources.list; then
-            echo "Detected Azure mirror in sources.list, switching to official Ubuntu archive..."
-            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
-        fi
-        
-        # Check if libta-lib-dev is available in the repositories
+        # Update package lists
         sudo apt-get update
         
-        # Verify Universe is active and libta-lib-dev is available
-        echo "Checking if libta-lib-dev is available in repositories:"
-        if apt-cache policy libta-lib-dev | grep -q "Candidate:"; then
-            echo "libta-lib-dev found in repositories, installing..."
-            sudo apt-get install -y libta-lib-dev
-            
-            # Verify C library exported symbols
-            echo "Verifying exported symbols in libta-lib.so:"
-            if [ -f "/usr/lib/libta-lib.so" ]; then
-                # Check the library with dash in the name (standard location)
-                if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
-                    echo "✓ TA_AVGDEV_Lookback symbol found in libta-lib.so"
-                    echo "TA-Lib C library installed successfully from package!"
-                else
-                    echo "Required symbols not found in installed package at /usr/lib/libta-lib.so"
-                    echo "Checking alternate filename (libta_lib.so)..."
-                    
-                    if [ -f "/usr/lib/libta_lib.so" ] && nm -D /usr/lib/libta_lib.so | grep -q "TA_AVGDEV_Lookback"; then
+        if [ "$DISTRO" = "debian" ]; then
+            # On Debian, the package is ta-lib-dev (without 'lib' prefix)
+            echo "Checking if ta-lib-dev is available in Debian repositories:"
+            if apt-cache policy ta-lib-dev | grep -q "Candidate:"; then
+                echo "ta-lib-dev found in repositories, installing..."
+                sudo apt-get install -y ta-lib-dev
+                
+                # Verify C library exported symbols
+                echo "Verifying exported symbols:"
+                if [ -f "/usr/lib/libta_lib.so" ]; then
+                    # Debian typically uses underscore in the filename
+                    if nm -D /usr/lib/libta_lib.so | grep -q "TA_AVGDEV_Lookback"; then
                         echo "✓ TA_AVGDEV_Lookback symbol found in libta_lib.so"
-                        echo "Creating symlinks for consistency..."
+                        echo "Creating symlinks for Python wrapper..."
                         sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
                         sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
                         sudo ldconfig
-                        echo "TA-Lib C library installed successfully from package!"
+                        echo "TA-Lib C library installed successfully from Debian package!"
                     else
                         echo "Required symbols not found in installed package, falling back to source installation..."
                         sudo apt-get install -y build-essential wget autoconf libtool pkg-config
                         INSTALL_FROM_SOURCE=1
                     fi
-                fi
-            else
-                echo "Library file not found at /usr/lib/libta-lib.so"
-                if [ -f "/usr/lib/libta_lib.so" ]; then
-                    echo "Found library at /usr/lib/libta_lib.so, creating symlinks..."
-                    sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
-                    sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
-                    sudo ldconfig
-                    
+                elif [ -f "/usr/lib/libta-lib.so" ]; then
+                    # Check if dash version exists
                     if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
                         echo "✓ TA_AVGDEV_Lookback symbol found in libta-lib.so"
-                        echo "TA-Lib C library installed successfully from package!"
+                        echo "TA-Lib C library installed successfully from Debian package!"
                     else
-                        echo "Required symbols not found even after creating symlinks, falling back to source installation..."
+                        echo "Required symbols not found in installed package, falling back to source installation..."
                         sudo apt-get install -y build-essential wget autoconf libtool pkg-config
                         INSTALL_FROM_SOURCE=1
                     fi
                 else
-                    echo "No library files found, falling back to source installation..."
+                    echo "Library file not found, falling back to source installation..."
                     sudo apt-get install -y build-essential wget autoconf libtool pkg-config
                     INSTALL_FROM_SOURCE=1
                 fi
+            else
+                echo "ta-lib-dev not found in repositories"
+                echo "Will install from source instead..."
+                sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+                INSTALL_FROM_SOURCE=1
             fi
         else
-            echo "libta-lib-dev not found in repositories (common on Ubuntu 24.04+)"
-            echo "Will install from source instead..."
-            sudo apt-get install -y build-essential wget autoconf libtool pkg-config
-            INSTALL_FROM_SOURCE=1
+            # Ubuntu handling (existing code)
+            # First try to enable Universe repository if on Ubuntu (contains libta-lib-dev)
+            if command -v add-apt-repository &> /dev/null; then
+                echo "Enabling Universe repository..."
+                sudo add-apt-repository universe -y
+            else
+                echo "add-apt-repository command not found, skipping Universe repository addition"
+            fi
+            
+            # Check if we're on an Azure VM or CI (common in GitHub Actions)
+            if grep -q "azure.archive.ubuntu.com" /etc/apt/sources.list; then
+                echo "Detected Azure mirror in sources.list, switching to official Ubuntu archive..."
+                sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+            fi
+            
+            # Verify Universe is active and libta-lib-dev is available
+            echo "Checking if libta-lib-dev is available in repositories:"
+            if apt-cache policy libta-lib-dev | grep -q "Candidate:"; then
+                echo "libta-lib-dev found in repositories, installing..."
+                sudo apt-get install -y libta-lib-dev
+                
+                # Verify C library exported symbols
+                echo "Verifying exported symbols in libta-lib.so:"
+                if [ -f "/usr/lib/libta-lib.so" ]; then
+                    # Check the library with dash in the name (standard location)
+                    if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
+                        echo "✓ TA_AVGDEV_Lookback symbol found in libta-lib.so"
+                        echo "TA-Lib C library installed successfully from package!"
+                    else
+                        echo "Required symbols not found in installed package at /usr/lib/libta-lib.so"
+                        echo "Checking alternate filename (libta_lib.so)..."
+                        
+                        if [ -f "/usr/lib/libta_lib.so" ] && nm -D /usr/lib/libta_lib.so | grep -q "TA_AVGDEV_Lookback"; then
+                            echo "✓ TA_AVGDEV_Lookback symbol found in libta_lib.so"
+                            echo "Creating symlinks for consistency..."
+                            sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
+                            sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+                            sudo ldconfig
+                            echo "TA-Lib C library installed successfully from package!"
+                        else
+                            echo "Required symbols not found in installed package, falling back to source installation..."
+                            sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+                            INSTALL_FROM_SOURCE=1
+                        fi
+                    fi
+                else
+                    echo "Library file not found at /usr/lib/libta-lib.so"
+                    if [ -f "/usr/lib/libta_lib.so" ]; then
+                        echo "Found library at /usr/lib/libta_lib.so, creating symlinks..."
+                        sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so
+                        sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0
+                        sudo ldconfig
+                        
+                        if nm -D /usr/lib/libta-lib.so | grep -q "TA_AVGDEV_Lookback"; then
+                            echo "✓ TA_AVGDEV_Lookback symbol found in libta-lib.so"
+                            echo "TA-Lib C library installed successfully from package!"
+                        else
+                            echo "Required symbols not found even after creating symlinks, falling back to source installation..."
+                            sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+                            INSTALL_FROM_SOURCE=1
+                        fi
+                    else
+                        echo "No library files found, falling back to source installation..."
+                        sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+                        INSTALL_FROM_SOURCE=1
+                    fi
+                fi
+            else
+                echo "libta-lib-dev not found in repositories (common on Ubuntu 24.04+)"
+                echo "Will install from source instead..."
+                sudo apt-get install -y build-essential wget autoconf libtool pkg-config
+                INSTALL_FROM_SOURCE=1
+            fi
         fi
     elif command -v yum &> /dev/null; then
         echo "Installing dependencies with yum..."
@@ -103,9 +159,18 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
         echo "Installing TA-Lib with Homebrew..."
         brew install ta-lib
         
+        # Use dynamic prefix detection
+        PREFIX=$(brew --prefix ta-lib)
+        echo "TA-Lib installed at: $PREFIX"
+        
         # Verify installation
-        if [ -f "/usr/local/lib/libta_lib.dylib" ] || [ -f "/usr/local/lib/libta-lib.dylib" ]; then
+        if [ -f "$PREFIX/lib/libta_lib.dylib" ] || [ -f "$PREFIX/lib/libta-lib.dylib" ]; then
             echo "TA-Lib C library installed successfully from Homebrew!"
+            # Set environment variables for proper linking
+            export LDFLAGS="-L$PREFIX/lib"
+            export CPPFLAGS="-I$PREFIX/include"
+            echo "Set LDFLAGS=$LDFLAGS"
+            echo "Set CPPFLAGS=$CPPFLAGS"
         else
             echo "Homebrew installation failed, falling back to source installation..."
             brew install wget automake libtool
@@ -117,8 +182,22 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
     fi
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
     echo "Detected Windows system"
-    echo "For Windows, we recommend using conda or the pre-built wheels."
-    echo "See: https://github.com/mrjbq7/ta-lib#windows"
+    echo "For Windows, we recommend using conda or pre-built wheels."
+    
+    # Get Python version for wheel URL
+    PYTHON_VERSION=$(python -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')")
+    ARCH="win_amd64"  # Assume 64-bit Windows
+    
+    echo "Detected Python version: $PYTHON_VERSION"
+    echo "Options for installation:"
+    
+    echo "1. Using pip with pre-compiled wheel:"
+    echo "   pip install https://github.com/TA-Lib/ta-lib-python/releases/download/TA_Lib-0.4.28/TA_Lib-0.4.28-cp${PYTHON_VERSION}-cp${PYTHON_VERSION}-${ARCH}.whl"
+    
+    echo "2. Using conda (recommended if you have Anaconda/Miniconda):"
+    echo "   conda install -c conda-forge ta-lib"
+    
+    echo "Please choose one of these methods to install TA-Lib."
     exit 0
 else
     echo "Unsupported OS type: $OSTYPE"
@@ -202,10 +281,18 @@ if [ "$INSTALL_FROM_SOURCE" = "1" ]; then
     # Set environment variables for Python wrapper installation
     echo "Setting up environment for Python wrapper installation..."
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        export TA_LIBRARY_PATH=/usr/local/lib
-        export TA_INCLUDE_PATH=/usr/local/include
-        export LDFLAGS="-L/usr/local/lib"
-        export CFLAGS="-I/usr/local/include"
+        if [ -n "$PREFIX" ]; then
+            # Use Homebrew prefix if available
+            export TA_LIBRARY_PATH=$PREFIX/lib
+            export TA_INCLUDE_PATH=$PREFIX/include
+            export LDFLAGS="-L$PREFIX/lib"
+            export CFLAGS="-I$PREFIX/include"
+        else
+            export TA_LIBRARY_PATH=/usr/local/lib
+            export TA_INCLUDE_PATH=/usr/local/include
+            export LDFLAGS="-L/usr/local/lib"
+            export CFLAGS="-I/usr/local/include"
+        fi
     else
         export TA_LIBRARY_PATH=/usr/lib
         export TA_INCLUDE_PATH=/usr/include
@@ -221,7 +308,8 @@ fi
 # Install Python wrapper
 echo "Installing TA-Lib Python wrapper..."
 pip install numpy
-if [ "$INSTALL_FROM_SOURCE" = "1" ]; then
+if [ "$INSTALL_FROM_SOURCE" = "1" ] || [[ "$OSTYPE" == "darwin"* ]]; then
+    # Use no-build-isolation for source builds or macOS with Homebrew
     pip install --no-build-isolation TA-Lib
 else
     pip install TA-Lib
@@ -229,15 +317,23 @@ fi
 
 # Verify Python wrapper
 echo "Verifying Python wrapper installation..."
-python3 - <<EOF
+python3 - <<EOF || python - <<EOF
 import sys
 import os
 
 try:
     import ctypes, talib
     # Try loading the library directly
-    lib = ctypes.CDLL("libta-lib.so")
-    print(f"C library loaded successfully")
+    if sys.platform.startswith('linux'):
+        try:
+            lib = ctypes.CDLL("libta-lib.so")
+            print("C library loaded successfully (dash version)")
+        except:
+            try:
+                lib = ctypes.CDLL("libta_lib.so")
+                print("C library loaded successfully (underscore version)")
+            except Exception as e:
+                print(f"Warning: Could not load C library directly: {e}")
     
     print(f"TA-Lib version: {talib.__version__}")
     functions = talib.get_functions()
@@ -269,7 +365,27 @@ if [ "$INSTALL_FROM_SOURCE" = "1" ]; then
 else
     echo "Installation method: System package"
 fi
+
 echo "--------------------------------------"
-echo "Verification steps to run manually if needed:"
-echo "1. Check library symbols: nm -D /usr/lib/libta-lib.so | grep TA_AVGDEV_Lookback"
-echo "2. Test Python wrapper: python -c \"import talib; print(talib.get_functions()[:5])\"" 
+echo "Troubleshooting tips if you encounter issues:"
+echo ""
+echo "For Linux:"
+echo "1. Create symbolic links between naming conventions:"
+echo "   sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0"
+echo "   sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so"
+echo "   sudo ldconfig"
+echo ""
+echo "For macOS:"
+echo "1. Set the correct Homebrew prefix:"
+echo "   export LDFLAGS=\"-L\$(brew --prefix ta-lib)/lib\""
+echo "   export CPPFLAGS=\"-I\$(brew --prefix ta-lib)/include\""
+echo "   pip install --no-build-isolation TA-Lib"
+echo ""
+echo "For Windows:"
+echo "1. Install from conda-forge:"
+echo "   conda install -c conda-forge ta-lib"
+echo "2. Or use precompiled wheel with correct Python version:"
+echo "   pip install https://github.com/TA-Lib/ta-lib-python/releases/download/TA_Lib-0.4.28/TA_Lib-0.4.28-cp311-cp311-win_amd64.whl"
+echo ""
+echo "Verification command:"
+echo "python -c \"import talib, numpy as np; print('TA-Lib SMA output:', talib.SMA(np.random.random(100))[:5])\"" 

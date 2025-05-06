@@ -13,6 +13,25 @@ echo "Checking for TA-Lib C library..."
 FOUND_LIB=0
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    # First detect if we're on Debian or Ubuntu
+    if [ -f "/etc/debian_version" ]; then
+        DEBIAN_VERSION=$(cat /etc/debian_version)
+        if grep -q "Ubuntu" /etc/issue 2>/dev/null; then
+            echo "Detected Ubuntu-based system"
+            DISTRO="ubuntu"
+        else
+            echo "Detected Debian-based system (version: $DEBIAN_VERSION)"
+            DISTRO="debian"
+        fi
+        
+        # Check if the package is installed
+        if [ "$DISTRO" = "debian" ] && dpkg -l | grep -q "ta-lib-dev"; then
+            echo "✓ Found ta-lib-dev package (Debian)"
+        elif [ "$DISTRO" = "ubuntu" ] && dpkg -l | grep -q "libta-lib-dev"; then
+            echo "✓ Found libta-lib-dev package (Ubuntu)"
+        fi
+    fi
+    
     # Linux - check both dash and underscore variants
     if [ -f "/usr/lib/libta-lib.so" ]; then
         echo "✓ Found libta-lib.so"
@@ -38,12 +57,23 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         echo "✗ Neither libta-lib.so nor libta_lib.so found"
     fi
 elif [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS - check both system and homebrew locations
-    LIB_PATHS=(
-        "/usr/local/lib/libta_lib.dylib"
-        "/usr/local/lib/libta-lib.dylib"
-        "$(brew --prefix ta-lib 2>/dev/null)/lib/libta_lib.dylib" # Newer homebrew path
-    )
+    # macOS - check both system and homebrew locations with dynamic prefix detection
+    if command -v brew &> /dev/null; then
+        PREFIX=$(brew --prefix ta-lib 2>/dev/null || echo "/usr/local")
+        echo "Checking for TA-Lib in Homebrew prefix: $PREFIX"
+        
+        LIB_PATHS=(
+            "$PREFIX/lib/libta_lib.dylib"
+            "$PREFIX/lib/libta-lib.dylib"
+            "/usr/local/lib/libta_lib.dylib"
+            "/usr/local/lib/libta-lib.dylib"
+        )
+    else
+        LIB_PATHS=(
+            "/usr/local/lib/libta_lib.dylib"
+            "/usr/local/lib/libta-lib.dylib"
+        )
+    fi
     
     for lib_path in "${LIB_PATHS[@]}"; do
         if [ -f "$lib_path" ]; then
@@ -56,14 +86,18 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
     if [ "$FOUND_LIB" -eq 0 ]; then
         echo "✗ TA-Lib C library not found in standard locations"
         echo "! Try: brew install ta-lib"
+        echo "! Then: export LDFLAGS=\"-L\$(brew --prefix ta-lib)/lib\" CPPFLAGS=\"-I\$(brew --prefix ta-lib)/include\""
     fi
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    # Windows - check for Python wheel installation
+    # Windows - check for Python wheel installation and provide better guidance
     echo "! Windows system detected - checking for TA-Lib Python wheel"
     
     # Try to use Powershell if available for better Windows detection
     if command -v powershell &>/dev/null; then
         PYTHON_SITE=$(powershell -Command "python -c 'import site; print(site.getsitepackages()[0])'")
+        PYTHON_VERSION=$(powershell -Command "python -c 'import sys; print(f\"{sys.version_info.major}{sys.version_info.minor}\")'")
+        ARCH="win_amd64"  # Assume 64-bit Windows
+        
         if [ -d "$PYTHON_SITE/talib" ]; then
             echo "✓ Found TA-Lib in Python site-packages (wheel installation)"
             FOUND_LIB=1
@@ -77,8 +111,17 @@ elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]];
     
     if [ "$FOUND_LIB" -eq 0 ]; then
         echo "✗ TA-Lib not found in Python site-packages"
-        echo "! On Windows, download and install a pre-built wheel from:"
-        echo "! https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib"
+        echo "! On Windows, install TA-Lib using one of these methods:"
+        
+        if [ -n "$PYTHON_VERSION" ]; then
+            echo "! 1. Download and install a pre-built wheel:"
+            echo "!    pip install https://github.com/TA-Lib/ta-lib-python/releases/download/TA_Lib-0.4.28/TA_Lib-0.4.28-cp${PYTHON_VERSION}-cp${PYTHON_VERSION}-${ARCH}.whl"
+        else
+            echo "! 1. Download and install a pre-built wheel matching your Python version"
+        fi
+        
+        echo "! 2. Install from conda-forge (if using Anaconda/Miniconda):"
+        echo "!    conda install -c conda-forge ta-lib"
     fi
 else
     echo "? Unknown OS type: $OSTYPE"
@@ -104,45 +147,102 @@ fi
 if $PYTHON_CMD -c "import talib" 2>/dev/null; then
     echo "✓ Python wrapper imports successfully"
     
-    # Test a more comprehensive function call
+    # Expanded test for multiple indicators to ensure comprehensive functionality
     if $PYTHON_CMD -c "
 import talib, numpy as np
 try:
     # Create test data
     data = np.random.random(100)
-    # Test SMA calculation
-    sma = talib.SMA(data)
-    # Test ATR calculation (requires multiple inputs)
-    high, low, close = np.random.random((3, 100))
+    high, low, close = np.random.random((3, 100)), np.random.random((3, 100)), np.random.random((3, 100))
+    volume = np.random.random(100) * 1000
+    
+    print('Testing common TA-Lib indicators:')
+    
+    # Test SMA calculation (moving average)
+    sma = talib.SMA(close, timeperiod=14)
+    print('✓ SMA: OK (shape:', sma.shape, ')')
+    
+    # Test RSI calculation (momentum)
+    rsi = talib.RSI(close, timeperiod=14)
+    print('✓ RSI: OK (shape:', rsi.shape, ')')
+    
+    # Test MACD calculation (trend)
+    macd, macd_signal, macd_hist = talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
+    print('✓ MACD: OK (shape:', macd.shape, ')')
+    
+    # Test Bollinger Bands (volatility)
+    upper, middle, lower = talib.BBANDS(close, timeperiod=20, nbdevup=2, nbdevdn=2)
+    print('✓ BBANDS: OK (shape:', upper.shape, ')')
+    
+    # Test ATR calculation (volatility)
     atr = talib.ATR(high, low, close, timeperiod=14)
-    # Make sure AVGDEV is available (the symbol that was missing before)
-    avgdev = talib.AVGDEV(data) if hasattr(talib, 'AVGDEV') else None
-    print('SMA shape:', sma.shape)
-    print('ATR shape:', atr.shape)
-    if avgdev is not None:
-        print('AVGDEV shape:', avgdev.shape)
-    print('Functions available:', len(talib.get_functions()))
-    print('First few functions:', talib.get_functions()[:3])
+    print('✓ ATR: OK (shape:', atr.shape, ')')
+    
+    # Test Stochastic Oscillator (momentum)
+    slowk, slowd = talib.STOCH(high, low, close, fastk_period=5, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)
+    print('✓ STOCH: OK (shape:', slowk.shape, ')')
+    
+    # Test ADX (trend strength)
+    adx = talib.ADX(high, low, close, timeperiod=14)
+    print('✓ ADX: OK (shape:', adx.shape, ')')
+    
+    # Test OBV (volume)
+    obv = talib.OBV(close, volume.astype(int))
+    print('✓ OBV: OK (shape:', obv.shape, ')')
+    
+    # Test AVGDEV (previously problematic)
+    if hasattr(talib, 'AVGDEV'):
+        avgdev = talib.AVGDEV(close, timeperiod=14)
+        print('✓ AVGDEV: OK (shape:', avgdev.shape, ')')
+    else:
+        print('⚠ AVGDEV: Not available in this TA-Lib build')
+    
+    print('✓ All indicator tests completed successfully')
+    print('Available functions:', len(talib.get_functions()))
+    
 except Exception as e:
     print('Error running TA-Lib functions:', e)
     exit(1)
 " 2>/dev/null; then
-        echo "✓ Function calls test successful"
+        echo "✓ Comprehensive indicator test successful"
     else
-        echo "✗ Function calls test failed (wrapper installed but not working correctly)"
+        echo "✗ Comprehensive indicator test failed (wrapper installed but not working correctly)"
         exit 1
     fi
 else
     echo "✗ Python wrapper import failed"
     if [ "$FOUND_LIB" -eq 1 ]; then
         echo "! C library found but Python wrapper missing or broken"
-        echo "! Run: pip install TA-Lib"
+        
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo "! For macOS, make sure to set the dynamic prefix:"
+            echo "! export LDFLAGS=\"-L\$(brew --prefix ta-lib)/lib\" CPPFLAGS=\"-I\$(brew --prefix ta-lib)/include\""
+            echo "! pip install --no-build-isolation TA-Lib"
+        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            echo "! For Linux, create symbolic links if needed:"
+            echo "! sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so"
+            echo "! sudo ln -sf /usr/lib/libta_lib.so.0 /usr/lib/libta-lib.so.0"
+            echo "! sudo ldconfig"
+            echo "! pip install TA-Lib"
+        else
+            echo "! Run: pip install TA-Lib"
+        fi
     else
         echo "! Both C library and Python wrapper are missing"
         echo "! Run: ./scripts/bootstrap_talib.sh"
     fi
     exit 1
 fi
+
+# Run quick smoke test
+echo -e "\nRunning quick smoke test:"
+$PYTHON_CMD - <<EOF
+import talib, numpy as np
+sma_result = talib.SMA(np.arange(10))
+print("SMA quick test:", sma_result[0:3])
+if sma_result.shape[0] == 10:
+    print("✓ Quick smoke test passed")
+EOF
 
 echo -e "\n✅ TA-Lib verification successful!"
 exit 0 

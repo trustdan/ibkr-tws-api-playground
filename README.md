@@ -20,6 +20,18 @@ This system scans for technical setups on S&P 500 stocks and trades vertical opt
 
 All trades include automated stop losses based on ATR.
 
+## Recent Updates
+
+- **Improved TA-Lib Installation**: We've enhanced TA-Lib installation across all platforms:
+  - Switched from Ubuntu to Debian for CI builds (more reliable `ta-lib-dev` package availability)
+  - Added dynamic Homebrew prefix detection for macOS (`brew --prefix ta-lib`)
+  - Enhanced Windows wheel installation with proper version detection
+  - Implemented comprehensive test suite for TA-Lib indicator verification
+
+- **Comprehensive Verification**: Added `scripts/verify_talib.sh` to test 8+ indicator types and ensure proper library linking
+
+- **CI Performance**: Optimized CI builds with caching for pip and Homebrew dependencies
+
 ## Features
 
 - **Fundamental Filtering**: Market cap ≥ $10B, price > $20, optionable stocks
@@ -50,7 +62,13 @@ The simplest installation method depends on your operating system:
 conda install -c conda-forge ta-lib
 ```
 
-**Ubuntu/Debian (Ubuntu 22.04 or earlier):**
+**Debian:**
+```bash
+# Debian has a native ta-lib-dev package
+sudo apt-get update && sudo apt-get install -y ta-lib-dev && pip install TA-Lib
+```
+
+**Ubuntu (22.04 or earlier):**
 ```bash
 # libta-lib-dev is in the Universe repository, which needs to be enabled first
 sudo add-apt-repository universe && sudo apt-get update && sudo apt-get install -y libta-lib-dev && pip install TA-Lib
@@ -58,26 +76,36 @@ sudo add-apt-repository universe && sudo apt-get update && sudo apt-get install 
 
 **Azure-based CI environments (including GitHub Actions):**
 ```bash
-# Azure mirrors may not include libta-lib-dev, switch to official Ubuntu archive
-sudo add-apt-repository universe
-sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
-sudo apt-get update && sudo apt-get install -y libta-lib-dev && pip install TA-Lib
+# Use Debian container for CI instead of Ubuntu for reliable TA-Lib installation
+# In GitHub Actions, use:
+container:
+  image: debian:bookworm-slim
+# Then install ta-lib-dev (without 'lib' prefix)
+apt-get update && apt-get install -y --no-install-recommends ta-lib-dev
 ```
 
 **Ubuntu 24.04 and newer:** 
-Ubuntu 24.04 (Noble Numbat) doesn't include the `libta-lib-dev` package, so you'll need to build from source (use our bootstrap script below).
+Ubuntu 24.04 (Noble Numbat) doesn't include the `libta-lib-dev` package, so you'll need to build from source (use our bootstrap script below) or switch to Debian.
 
 **macOS:**
 ```bash
-brew install ta-lib && pip install TA-Lib
+# Install with Homebrew and use dynamic prefix detection
+brew install ta-lib
+export LDFLAGS="-L$(brew --prefix ta-lib)/lib"
+export CPPFLAGS="-I$(brew --prefix ta-lib)/include"
+pip install --no-build-isolation TA-Lib
 ```
 
 **Windows:**
 ```bash
-# Download the wheel appropriate for your Python version (e.g., for Python 3.9, 64-bit)
-pip install TA_Lib-0.4.27-cp39-cp39-win_amd64.whl 
+# Install with correct Python version in wheel URL
+python -c "import sys; print(f'pip install https://github.com/TA-Lib/ta-lib-python/releases/download/TA_Lib-0.4.28/TA_Lib-0.4.28-cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}-win_amd64.whl')" | cmd
 ```
-(Download the wheel file first from [Christoph Gohlke's repository](https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib))
+
+Or using conda:
+```bash
+conda install -c conda-forge ta-lib
+```
 
 #### Verifying Your Installation
 

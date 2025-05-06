@@ -9,10 +9,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      LDFLAGS: "-L/usr/lib"
-      CFLAGS: "-I/usr/include"
-      LD_LIBRARY_PATH: "/usr/lib:${LD_LIBRARY_PATH}"
     strategy:
       fail-fast: false
       matrix:
@@ -24,115 +20,23 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install TA-Lib C library
+    
+    - name: Install TA-Lib system library
       run: |
-        # Install build dependencies
         sudo apt-get update
-        sudo apt-get install -y build-essential wget autoconf libtool pkg-config
-
-        # Download and install TA-Lib from source
-        wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-        tar -xzf ta-lib-0.4.0-src.tar.gz
-        cd ta-lib/
-        ./configure --prefix=/usr
-        make
-        sudo make install
-        cd ..
+        sudo apt-get install -y libta-lib-dev
         
-        # Find the actual library path and version
-        ACTUAL_LIB_PATH=$(sudo find /usr -name "libta_lib.so*" -type f | head -1)
-        echo "Actual library path: ${ACTUAL_LIB_PATH}"
-        
-        # Update linker cache immediately
-        sudo ldconfig
-        
-        # Create symlinks with full paths to ensure they point to the right files
-        sudo ln -sf ${ACTUAL_LIB_PATH} /usr/lib/libta-lib.so
-        if [[ "${ACTUAL_LIB_PATH}" == *".0.0.0" ]]; then
-          BASE_LIB=${ACTUAL_LIB_PATH%.0.0.0}
-          sudo ln -sf ${BASE_LIB}.0 /usr/lib/libta-lib.so.0
-        else
-          sudo ln -sf ${ACTUAL_LIB_PATH} /usr/lib/libta-lib.so.0
-        fi
-        
-        # Verify symlinks are correct
-        echo "Checking symlinks:"
-        ls -la /usr/lib/libta-lib.so*
-        ls -la /usr/lib/libta_lib.so*
-        
-        # Run ldconfig again to be sure
-        sudo ldconfig
-        
-        # Verify C library exports the required symbols
-        echo "Checking for TA_AVGDEV_Lookback symbol:"
-        nm -D ${ACTUAL_LIB_PATH} | grep TA_AVGDEV_Lookback || echo "Symbol not found!"
-        
-        # Try alternate verification of symbols
-        echo "Checking for other common TA-Lib symbols:"
-        nm -D ${ACTUAL_LIB_PATH} | grep -E "TA_ATR|TA_SMA" || echo "Common symbols not found!"
-        
-        # Verify direct C library loading works with absolute path first
-        python - <<EOF
-        import ctypes
-        import os
-        try:
-            # Try with absolute path first
-            lib = ctypes.CDLL("${ACTUAL_LIB_PATH}")
-            print("C library loaded successfully with absolute path")
-            # Then try with just the name to test loader path
-            lib = ctypes.CDLL("libta-lib.so")
-            print("C library loaded successfully with loader path")
-        except Exception as e:
-            print(f"Error loading library: {e}")
-            exit(1)
-        EOF
+        # Verify the library is properly installed and registered
+        echo "Checking TA-Lib library in system cache:"
+        ldconfig -p | grep libta-lib
+        ls -la /usr/lib/libta-lib*
+    
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         python -m pip install wheel setuptools pytest pytest-cov flake8 black mypy
-        
-        # Install NumPy first (required for TA-Lib)
         python -m pip install numpy
-        
-        # Environment setup for TA-Lib
-        export TA_LIBRARY_PATH=/usr/lib
-        export TA_INCLUDE_PATH=/usr/include
-        
-        # Force rebuild against our installed version with very explicit flags
-        LDFLAGS="-L/usr/lib" CFLAGS="-I/usr/include" pip install --verbose --no-build-isolation TA-Lib
-        
-        # Verify TA-Lib installation with complete diagnostics
-        python - <<EOF
-        import sys
-        import os
-        print(f"Python version: {sys.version}")
-        print(f"LD_LIBRARY_PATH: {os.environ.get('LD_LIBRARY_PATH', 'Not set')}")
-        print(f"Library paths searched: {os.environ.get('LD_LIBRARY_PATH', '').split(':')}")
-        
-        try:
-            import talib
-            print(f"TA-Lib version: {talib.__version__}")
-            print(f"Available functions: {talib.get_functions()[:5]}")
-            print(f"ATR function available: {hasattr(talib, 'ATR')}")
-            
-            # Test a simple function call
-            import numpy as np
-            close = np.random.random(100)
-            output = talib.SMA(close)
-            print(f"SMA calculation successful: {output.shape}")
-        except ImportError as e:
-            print(f"Error importing talib: {e}")
-            
-            # Try to load the library directly to see the error
-            import ctypes
-            try:
-                lib = ctypes.CDLL("libta-lib.so")
-                print("Library loaded but talib import failed")
-            except Exception as le:
-                print(f"Library loading error: {le}")
-            
-            sys.exit(1)
-        EOF
+        python -m pip install TA-Lib
         
         # Install other dependencies
         if [ -f requirements.txt ]; then
@@ -141,22 +45,44 @@ jobs:
         
         # Install package in development mode
         pip install -e .
+    
+    - name: Verify TA-Lib installation
+      run: |
+        python - << 'EOF'
+        import ctypes, talib
+        # Ensure the C library loads
+        ctypes.CDLL('libta-lib.so')
+        # Ensure the wrapper finds its symbols
+        funcs = talib.get_functions()
+        print('TA-Lib functions sample:', funcs[:5])
+        
+        # Test a simple function call
+        import numpy as np
+        close = np.random.random(100)
+        output = talib.SMA(close)
+        print(f"SMA calculation successful: {output.shape}")
+        EOF
+    
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+    
     - name: Check formatting with black
       run: |
         black --check --diff .
+    
     - name: Type check with mypy
       run: |
         mypy --ignore-missing-imports .
+    
     - name: Test with pytest
       run: |
         # Run tests with coverage
         pytest --cov=auto_vertical_spread_trader --cov-report=xml --cov-report=term --cov-fail-under=80
+    
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:

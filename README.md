@@ -40,9 +40,40 @@ All trades include automated stop losses based on ATR.
 
 TA-Lib is a critical dependency for this system and requires a two-step installation: the C library must be installed first, followed by the Python wrapper.
 
-#### Recommended Method: Bootstrap Script
+#### Platform-Specific One-Liners
 
-We provide a bootstrap script that automates the entire TA-Lib installation process:
+The simplest installation method depends on your operating system:
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update && sudo apt-get install -y libta-lib-dev && pip install TA-Lib
+```
+
+**macOS:**
+```bash
+brew install ta-lib && pip install TA-Lib
+```
+
+**Windows:**
+```bash
+# Download the wheel appropriate for your Python version (e.g., for Python 3.9, 64-bit)
+pip install TA_Lib-0.4.27-cp39-cp39-win_amd64.whl 
+```
+(Download the wheel file first from [Christoph Gohlke's repository](https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib))
+
+#### Verifying Your Installation
+
+To check if TA-Lib is properly installed (works on all platforms):
+
+```bash
+python -c "import talib; print('TA-Lib installed successfully! Functions:', talib.get_functions()[:3])"
+```
+
+If this returns a list of function names (like `['ADX', 'ADXR', 'APO']`), your installation is working correctly.
+
+#### Automated Installation: Bootstrap Script
+
+For a guided installation that handles your specific environment, we provide a bootstrap script:
 
 ```bash
 # Clone the repository if you haven't already
@@ -58,17 +89,33 @@ chmod +x scripts/bootstrap_talib.sh
 
 This script will:
 - Detect your operating system
-- Install necessary dependencies
-- Download and compile the C library
-- Create required symlinks
-- Install the Python wrapper
+- Install necessary dependencies (using system packages when available)
+- Set up TA-Lib appropriately for your platform
 - Verify the installation works correctly
 
-For Windows users, the script will recommend using pre-built wheels instead.
+#### Detailed Installation Instructions
 
-#### Manual Installation Methods
+If you need more control over the installation process:
 
-If you prefer to install manually or the bootstrap script doesn't work for your environment:
+##### Ubuntu/Debian
+```bash
+# Install the C library and development headers
+sudo apt-get update
+sudo apt-get install -y libta-lib-dev
+
+# Install the Python wrapper
+pip install TA-Lib
+```
+
+##### macOS
+Using Homebrew:
+```bash
+# Install the C library
+brew install ta-lib
+
+# Install the Python wrapper
+pip install TA-Lib
+```
 
 ##### Windows
 
@@ -85,28 +132,6 @@ If you prefer to install manually or the bootstrap script doesn't work for your 
    - Unzip to `C:\ta-lib`
    - Add to environment variables: `LIB` path should include `C:\ta-lib\lib`, and `INCLUDE` should include `C:\ta-lib\include`
    - Install the Python wrapper: `pip install ta-lib`
-
-#### macOS
-
-Using Homebrew:
-```
-brew install ta-lib
-pip install ta-lib
-```
-
-#### Linux (Ubuntu/Debian)
-
-```
-sudo apt-get update
-sudo apt-get install -y build-essential autoconf libtool pkg-config
-wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-tar -xzf ta-lib-0.4.0-src.tar.gz
-cd ta-lib/
-./configure --prefix=/usr
-make
-sudo make install
-pip install ta-lib
-```
 
 ### 2. Installing the Package
 
@@ -218,10 +243,10 @@ Common issues and solutions:
 
 - **TA-Lib Installation Issues**: 
   - If encountering import errors, first try our `scripts/bootstrap_talib.sh` script
-  - For "undefined symbol" errors on Linux, ensure the C library and Python wrapper versions match
+  - For "undefined symbol" errors on Linux, use the system package: `sudo apt-get install libta-lib-dev`
   - Common error: `ImportError: libta_lib.so.0: cannot open shared object file`
     - Run `sudo ldconfig` after installation to update the shared library cache
-    - Check that symlinks exist: `ls -l /usr/lib/libta-lib.so*`
+    - For Ubuntu/Debian, use the system package which handles this automatically
   - For Windows, using pre-built wheels is strongly recommended
 
 - **Rate Limiting**: If you encounter "Pacing Violation" errors, increase the `QUERY_DELAY` in config.py
@@ -303,4 +328,4 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of changes to this project.
 ## Acknowledgments
 
 - [IB Insync](https://github.com/erdewit/ib_insync) for the Interactive Brokers API
-- [TA-Lib](https://github.com/mrjbq7/ta-lib) for technical analysis 
+- [TA-Lib](https://github.com/mrjbq7/ta-lib) for technical analysis

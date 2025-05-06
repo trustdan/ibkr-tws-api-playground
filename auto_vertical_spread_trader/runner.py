@@ -8,12 +8,13 @@ import time
 import traceback
 import smtplib
 import datetime
-import pytz
+import pytz  # type: ignore[import]
 from email.mime.text import MIMEText
 from threading import Event
 import argparse
 import os
 import shutil
+from pathlib import Path
 
 from ib_insync import IB, util
 

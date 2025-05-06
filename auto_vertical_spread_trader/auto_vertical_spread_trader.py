@@ -12,7 +12,7 @@ from threading import Event
 import traceback
 import os
 import pickle
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple, Optional, Union
 
 # --- CONFIG ---
 CONFIG = {
@@ -626,3 +626,166 @@ except KeyboardInterrupt:
     stop_monitor_thread.join(timeout=10)  # Wait for monitor thread with timeout
     ib.disconnect()
     logger.info("Disconnected from IB. Exiting.")
+
+
+# Create the main class for importing in tests and applications
+class AutoVerticalSpreadTrader:
+    """
+    Main trader class for vertical spread trading strategies
+    """
+    
+    def __init__(self, config_overrides: Optional[Dict[str, Any]] = None):
+        """
+        Initialize the trader with optional configuration overrides
+        
+        Args:
+            config_overrides: Optional dictionary of configuration overrides
+        """
+        # Apply configuration overrides if provided
+        self.config = CONFIG.copy()
+        if config_overrides:
+            self.config.update(config_overrides)
+            
+        self.ib = None
+        self.spreadBook: Dict[str, Dict[str, Any]] = {}
+        self.stop_monitor_thread = None
+        self.exit_event = Event()
+        self.large_caps = []
+        self.lastRunDate = None
+        self.tz = pytz.timezone("US/Eastern")
+        
+        # Configure logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            handlers=[logging.FileHandler("auto_trader.log"), logging.StreamHandler()],
+        )
+        self.logger = logging.getLogger(__name__)
+        
+    def initialize(self):
+        """
+        Initialize the trader, connect to IB, and setup the universe
+        """
+        self.logger.info("Initializing trader...")
+        
+        # Connect to IB
+        self.ib = IB()
+        self.ib.connect(
+            self.config["IB_HOST"],
+            self.config["IB_PORT"],
+            clientId=self.config["IB_CLIENT_ID"]
+        )
+        
+        # Load universe and filter
+        universe = self._load_universe()
+        self.large_caps = self._filter_universe(universe)
+        
+        # Start the monitor thread
+        self.exit_event = Event()
+        self.stop_monitor_thread = threading.Thread(target=self._monitor_stops, daemon=True)
+        self.stop_monitor_thread.start()
+        
+        self.logger.info("Trader initialized")
+        return True
+        
+    def _load_universe(self) -> List[str]:
+        """Load trading universe"""
+        # For now, use the existing function
+        return load_sp500_tickers()
+    
+    def _filter_universe(self, symbols: List[str]) -> List[str]:
+        """Filter universe to large cap, liquid stocks"""
+        # For now, use the existing function
+        return filter_universe(symbols)
+    
+    def run_scan(self, scan_type: str) -> List[Tuple[str, Any, float]]:
+        """
+        Run a scan for the given scan type
+        
+        Args:
+            scan_type: Type of scan to run (bull_pullbacks, bear_rallies, high_base, low_base)
+            
+        Returns:
+            List of tuples with signal data: (symbol, bar, ATR)
+        """
+        if scan_type == "bull_pullbacks":
+            return scan_bull_pullbacks(self.large_caps)
+        elif scan_type == "bear_rallies":
+            return scan_bear_rallies(self.large_caps)
+        elif scan_type == "high_base":
+            return scan_high_base(self.large_caps)
+        elif scan_type == "low_base":
+            return scan_low_base(self.large_caps)
+        else:
+            self.logger.error(f"Unknown scan type: {scan_type}")
+            return []
+    
+    def _is_entry_time(self) -> bool:
+        """
+        Check if it's time to enter trades (after configured hour in ET)
+        """
+        now = datetime.now(self.tz)
+        return now.hour >= self.config["SCAN_HOUR_ET"]
+    
+    def run_entries(self):
+        """
+        Run entry scans and place trades
+        """
+        try:
+            if not self._is_entry_time():
+                self.logger.info("Not entry time yet, skipping scans")
+                return
+
+            self.logger.info(f"Running entry scans")
+            self.lastRunDate = datetime.now(self.tz).date()
+
+            # Run all scans
+            bulls = scan_bull_pullbacks(self.large_caps)
+            bears = scan_bear_rallies(self.large_caps)
+            high_bases = scan_high_base(self.large_caps)
+            low_bases = scan_low_base(self.large_caps)
+
+            # Place orders for each scan result
+            for sym, bar, atr in bulls:
+                select_and_place(sym, "bull", bar, atr)
+            for sym, bar, atr in bears:
+                select_and_place(sym, "bear", bar, atr)
+            for sym, bar, atr in high_bases:
+                select_and_place(sym, "high_base", bar, atr)
+            for sym, bar, atr in low_bases:
+                select_and_place(sym, "low_base", bar, atr)
+
+            self.logger.info(
+                f"Completed scans: found {len(bulls)} bull, {len(bears)} bear, "
+                + f"{len(high_bases)} high-base, and {len(low_bases)} low-base spreads."
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error in run_entries: {e}")
+            traceback.print_exc()
+    
+    def _monitor_stops(self):
+        """
+        Monitor open positions for stop-loss violations
+        Exits cleanly when exit_event is set
+        """
+        # For now, use a wrapper around the existing function 
+        monitor_stops()
+        
+    def shutdown(self):
+        """
+        Shutdown the trader cleanly
+        """
+        self.logger.info("Shutting down trader...")
+        self.exit_event.set()  # Signal threads to exit
+        
+        if self.stop_monitor_thread:
+            self.logger.info("Waiting for monitor thread to exit...")
+            self.stop_monitor_thread.join(timeout=10)
+            
+        if self.ib and self.ib.isConnected():
+            self.ib.disconnect()
+            self.logger.info("Disconnected from IB")
+            
+        self.logger.info("Trader shutdown complete")
+        
